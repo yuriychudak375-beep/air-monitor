@@ -83,11 +83,62 @@ let targets = [];
 
 ws.onmessage = e => {
     const d = JSON.parse(e.data);
-    if (d.type==="state") {
+    if (d.type === "state") {
         targets = d.targets;
-        list.innerHTML = targets.map(t=>`ID ${t.id} — ${t.type}`).join("<br>");
+        renderList();
     }
 };
+
+
+// =========================
+// НОВИЙ СПИСОК ЦІЛЕЙ
+// =========================
+function renderList() {
+  list.innerHTML = "";
+
+  targets.forEach(t => {
+    const item = document.createElement("div");
+    item.className = "target-item";
+    item.style.border = "1px solid #333";
+    item.style.padding = "8px";
+    item.style.marginBottom = "8px";
+    item.style.background = "#202020";
+    item.style.borderRadius = "6px";
+
+    item.innerHTML = `
+      <b>Тип:</b> ${t.type}<br>
+      <b>ID:</b> ${t.id}<br>
+      <b>Lat:</b> ${t.lat.toFixed(4)}<br>
+      <b>Lon:</b> ${t.lon.toFixed(4)}<br>
+      <button class="delBtn" data-id="${t.id}"
+        style="
+          margin-top:6px;
+          width:100%;
+          padding:6px;
+          background:#550000;
+          border:1px solid #992222;
+          border-radius:4px;
+          color:#eee;
+          cursor:pointer;
+        ">
+        ❌ Видалити
+      </button>
+    `;
+
+    list.appendChild(item);
+  });
+
+  document.querySelectorAll(".delBtn").forEach(btn => {
+    btn.onclick = () => {
+      ws.send(JSON.stringify({
+        role: "admin",
+        action: "remove",
+        id: btn.dataset.id
+      }));
+    };
+  });
+}
+
 
 add.onclick = ()=>{
     const v = dirToVector(dir.value);
@@ -110,3 +161,4 @@ clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
 
 </body>
 </html>
+
