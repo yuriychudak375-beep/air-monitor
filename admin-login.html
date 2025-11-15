@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Вхід в адмінку</title>
+<style>
+body {
+  background:#111;
+  color:#eee;
+  font-family:Arial;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+#box {
+  background:#222;
+  padding:20px;
+  border-radius:6px;
+  width:260px;
+  text-align:center;
+}
+input {
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  background:#333;
+  border:1px solid #555;
+  color:#eee;
+}
+button {
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  background:#444;
+  color:#fff;
+  border:1px solid #666;
+}
+</style>
+</head>
+<body>
+
+<div id="box">
+  <h3>Адмін вхід</h3>
+  <input id="p" type="password" placeholder="Пароль">
+  <button onclick="login()">Увійти</button>
+  <div id="err" style="color:#f44; margin-top:10px;"></div>
+</div>
+
+<script>
+function login() {
+  fetch("/admin-login", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ password: document.getElementById("p").value })
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.ok) {
+      location.href = "/admin-real"; // відкриємо реальну адмінку
+    } else {
+      document.getElementById("err").innerText = "Неправильний пароль!";
+    }
+  });
+}
+</script>
+
+</body>
+</html>
