@@ -1,0 +1,11 @@
+{
+  "name": "air-monitor",
+  "version": "1.0.0",
+  "main": "server-ws.js",
+  "scripts": {
+    "start": "node server-ws.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}

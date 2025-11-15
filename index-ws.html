@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Monitor</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<style>
+body{margin:0;background:#111;}
+#map{width:100vw;height:100vh;}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+
+const map = L.map("map").setView([49,31],6);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+const ICONS = {
+    x101: "models/x101.png",
+    shahed: "models/shahed.png",
+    iskander: "models/iskander.png",
+    kalibr: "models/kalibr.png"
+};
+
+// ІНДИВІДУАЛЬНІ OFFSET
+const OFFSET = {
+    x101: -45,       // правильна
+    shahed: 0,   // повернути з ↑ на →
+    iskander: 0, // повернути з ↑ на →
+    kalibr: 0    // ПОТРІБНО ПІСЛЯ ТОГО ЯК ТИ КИНЕШ PNG
+};
+
+function createMarker(lat, lon, url){
+    const div = document.createElement("div");
+    div.style.width="60px";
+    div.style.height="60px";
+
+    const img=document.createElement("img");
+    img.src=url;
+    img.style.width="100%";
+    img.style.height="100%";
+    img.style.transformOrigin="center";
+
+    div.appendChild(img);
+
+    const icon=L.divIcon({className:"",html:div,iconSize:[60,60],iconAnchor:[30,30]});
+
+    const m=L.marker([lat,lon],{icon});
+    m._img = img;
+    return m;
+}
+
+const markers = new Map();
+
+function update(list){
+    const exist=new Set();
+
+    for(const t of list){
+        exist.add(t.id);
+
+        let m = markers.get(t.id);
+        if (!m){
+            m = createMarker(t.lat,t.lon,ICONS[t.type]);
+            m.addTo(map);
+            markers.set(t.id,m);
+        } else {
+            m.setLatLng([t.lat,t.lon]);
+        }
+
+        // ПРАВИЛЬНА МАТЕМАТИКА
+        let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
+        angle = 90 - angle + (OFFSET[t.type] || 0);
+
+        m._img.style.transform = `rotate(${angle}deg)`;
+    }
+
+    markers.forEach((m,id)=>{
+        if (!exist.has(id)){
+            map.removeLayer(m);
+            markers.delete(id);
+        }
+    });
+}
+
+const ws = new WebSocket(`wss://${location.host}`);
+ws.onmessage = e =>{
+    const d = JSON.parse(e.data);
+    if (d.type==="state") update(d.targets);
+};
+
+</script>
+
+</body>
+</html>
