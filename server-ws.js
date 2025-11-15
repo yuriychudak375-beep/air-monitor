@@ -1,81 +1,76 @@
-// server.js
+const express = require("express");
 const http = require("http");
-const fs = require("fs");
-const path = require("path");
 const WebSocket = require("ws");
+const path = require("path");
 
-const server = http.createServer((req, res) => {
-    let file = req.url;
-    if (file === "/") file = "/index.html";
-
-    const filePath = path.join(__dirname, file);
-    
-    fs.readFile(filePath, (err, data) => {
-        if (err) { res.writeHead(404); return res.end("Not found"); }
-
-        const ext = path.extname(filePath);
-        const type = {
-            ".html": "text/html",
-            ".js": "text/javascript",
-            ".css": "text/css",
-            ".png": "image/png"
-        }[ext] || "text/plain";
-
-        res.writeHead(200, { "Content-Type": type });
-        res.end(data);
-    });
-});
-
-server.listen(3000, () => console.log("SERVER RUNNING @ http://localhost:3000"));
-
+const app = express();
+const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-let targets = [];
-let nextId = 1;
+// ======= STATIC FILES =======
+app.use(express.static(__dirname)); // роздає всі файли з кореня
 
-// send to all
-function broadcast() {
-    const packet = JSON.stringify({ type: "state", targets });
-    wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(packet));
-}
-
-wss.on("connection", ws => {
-    ws.send(JSON.stringify({ type: "state", targets }));
-
-    ws.on("message", raw => {
-        const msg = JSON.parse(raw);
-        if (msg.role !== "admin") return;
-
-        if (msg.action === "add") {
-            targets.push({
-                id: nextId++,
-                type: msg.target.type,
-                lat: msg.target.lat,
-                lon: msg.target.lon,
-                dx: msg.target.dx,
-                dy: msg.target.dy,
-                speed: msg.target.speed,
-            });
-            broadcast();
-        }
-
-        if (msg.action === "remove") {
-            targets = targets.filter(t => t.id !== msg.id);
-            broadcast();
-        }
-
-        if (msg.action === "clear") {
-            targets = [];
-            broadcast();
-        }
-    });
+// ======= ROUTES =======
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index-ws.html"));
 });
 
-// MOVE OBJECTS
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-ws.html"));
+});
+
+// ======= TARGET DATA =======
+let targets = [];
+
+function broadcast(obj) {
+  const msg = JSON.stringify(obj);
+  wss.clients.forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  });
+}
+
+// ======= WEBSOCKET =========
+wss.on("connection", ws => {
+  console.log("WS client connected");
+
+  ws.send(JSON.stringify({ type: "state", targets }));
+
+  ws.on("message", msg => {
+    let data;
+    try { data = JSON.parse(msg); } catch { return; }
+
+    // Admin actions
+    if (data.role === "admin") {
+      if (data.action === "add") {
+        const id = Date.now() + "_" + Math.random();
+        const t = { id, ...data.target };
+        targets.push(t);
+      }
+      else if (data.action === "remove") {
+        targets = targets.filter(t => t.id !== data.id);
+      }
+      else if (data.action === "clear") {
+        targets = [];
+      }
+
+      broadcast({ type: "state", targets });
+    }
+  });
+});
+
+// ======= TARGET MOVEMENT =======
 setInterval(() => {
-    targets.forEach(t => {
-        t.lat += t.dy * t.speed;
-        t.lon += t.dx * t.speed;
-    });
-    broadcast();
-}, 100);
+  targets.forEach(t => {
+    t.lat += t.dx * t.speed;
+    t.lon += t.dy * t.speed;
+  });
+
+  broadcast({ type: "state", targets });
+
+}, 1000);
+
+// ======= START SERVER =======
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
