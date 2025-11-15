@@ -61,8 +61,11 @@ wss.on("connection", ws => {
 // ======= TARGET MOVEMENT =======
 setInterval(() => {
   targets.forEach(t => {
-    t.lat += t.dx * t.speed;
-    t.lon += t.dy * t.speed;
+    // dy рухає широту (N/S)
+    t.lat += t.dy * t.speed;
+
+    // dx рухає довготу (E/W)
+    t.lon += t.dx * t.speed;
   });
 
   broadcast({ type: "state", targets });
@@ -74,3 +77,4 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
