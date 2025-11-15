@@ -3,6 +3,8 @@ const http = require("http");
 const WebSocket = require("ws");
 const path = require("path");
 
+const ADMIN_PASSWORD = "42Adminpassfrommapofdrones42";
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -11,12 +13,27 @@ const wss = new WebSocket.Server({ server });
 app.use(express.static(__dirname)); // роздає всі файли з кореня
 
 // ======= ROUTES =======
+// 🔥 Перевірка пароля
+app.post("/admin-login", express.json(), (req, res) => {
+  if (req.body.password === ADMIN_PASSWORD) {
+    return res.json({ ok: true });
+  }
+  res.json({ ok: false });
+});
+
+// Головна сторінка
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index-ws.html"));
 });
 
+
 app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-login.html"));
+
+app.get("/admin-real", (req, res) => {
   res.sendFile(path.join(__dirname, "admin-ws.html"));
+});
+
 });
 
 // ======= TARGET DATA =======
@@ -77,4 +94,5 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
 
