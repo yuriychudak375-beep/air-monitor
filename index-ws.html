@@ -5,58 +5,15 @@
 <title>Monitor</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <style>
-  :root {
-    --bg-color: #000000;
-    --text-color: #e1e1e7;
-    --map-filter: brightness(0.75) contrast(1.05) saturate(1.05);
-  }
-
   body {
     margin: 0;
-    background: var(--bg-color);
-    color: var(--text-color);
-    font-family: "Inter", Arial, sans-serif;
-  }
-
-  /* Темна тема */
-  body.theme-dark {
-    --bg-color: #000000;
-    --text-color: #e1e1e7;
-    --map-filter: brightness(0.85) contrast(1.05) saturate(1.05);
-  }
-
-  /* Світла тема */
-  body.theme-light {
-    --bg-color: #f2f2f5;
-    --text-color: #111111;
-    --map-filter: brightness(1) contrast(1) saturate(1);
+    background: #0d0d0d; /* темний фон */
   }
 
   #map {
     width: 100vw;
     height: 100vh;
-    filter: var(--map-filter);
-  }
-
-  #themeToggle {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 1000;
-    padding: 6px 10px;
-    font-size: 13px;
-    border-radius: 999px;
-    border: 1px solid #333;
-    background: rgba(20, 20, 24, 0.9);
-    color: #e1e1e7;
-    cursor: pointer;
-    backdrop-filter: blur(6px);
-  }
-
-  body.theme-light #themeToggle {
-    background: rgba(245, 245, 248, 0.9);
-    color: #111;
-    border-color: #ccc;
+    filter: brightness(1.1); /* трохи підсвітити темну карту */
   }
 </style>
 
@@ -70,7 +27,15 @@
 <script>
 
 const map = L.map("map").setView([49,31],6);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  {
+    attribution:
+      '&copy; <a href="https://carto.com/">CARTO</a> | Dark Matter tiles',
+    subdomains: "abcd",
+    maxZoom: 19
+  }
+).addTo(map);
 
 const ICONS = {
     x101: "models/x101.png",
@@ -187,6 +152,7 @@ const THEME_KEY = "airmon_theme";
 
 </body>
 </html>
+
 
 
 
