@@ -1,323 +1,286 @@
-<<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="uk">
 <head>
-<meta charset="utf-8">
-<title>Admin Panel</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-<style>
-  :root {
-    --bg-color: #000000;
-    --text-color: #e1e1e7;
-    --panel-bg: #141416;
-    --panel-border: #2a2a2d;
-    --input-bg: #1c1c20;
-    --input-border: #333;
-    --card-bg: #1a1a1d;
-    --card-border: #2a2a2d;
-    --map-filter: brightness(0.75) contrast(1.1);
-  }
+  <meta charset="UTF-8" />
+  <title>Адмін — WS режим</title>
 
-  body {
-    margin: 0;
-    background: var(--bg-color);
-    color: var(--text-color);
-    font-family: "Inter", Arial, sans-serif;
-  }
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
-  body.theme-dark {
-    --bg-color: #0d0d0f;
-    --text-color: #e1e1e7;
-    --panel-bg: #141416;
-    --panel-border: #2a2a2d;
-    --input-bg: #1c1c20;
-    --input-border: #333;
-    --card-bg: #1a1a1d;
-    --card-border: #2a2a2d;
-    --map-filter: brightness(0.85) contrast(1.1);
-  }
+  <style>
+    /* ===================================
+       ТЕМИ (CSS змінні)
+       =================================== */
+    :root {
+      --bg: #111;
+      --panel-bg: #181818;
+      --text: #eee;
+      --input-bg: #222;
+      --input-border: #555;
+    }
+    .light {
+      --bg: #f5f5f5;
+      --panel-bg: #fff;
+      --text: #000;
+      --input-bg: #eee;
+      --input-border: #ccc;
+    }
 
-  body.theme-light {
-    --bg-color: #f2f2f6;
-    --text-color: #111111;
-    --panel-bg: #ffffff;
-    --panel-border: #d0d0d5;
-    --input-bg: #f4f4f7;
-    --input-border: #c8c8d0;
-    --card-bg: #ffffff;
-    --card-border: #d0d0d5;
-    --map-filter: brightness(1) contrast(1);
-  }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
 
-  #wrap {
-    display: flex;
-    height: 100vh;
-  }
+    /* ===================================
+       Топ бар (перемикач теми)
+       =================================== */
+    #themeBar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 40px;
+      background: var(--panel-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      border-bottom: 1px solid var(--input-border);
+    }
 
-  #map {
-    width: 70vw;
-    height: 100vh;
-    filter: var(--map-filter);
-  }
+    #themeToggle {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      padding: 5px 15px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
 
-  #panel {
-    width: 30vw;
-    padding: 14px;
-    background: var(--panel-bg);
-    border-left: 1px solid var(--panel-border);
-    box-sizing: border-box;
-    overflow-y: auto;
-  }
+    /* ===================================
+       Основний контейнер
+       =================================== */
+    #wrap {
+      display: flex;
+      margin-top: 40px; /* бо top-bar 40px */
+      height: calc(100vh - 40px);
+      width: 100vw;
+    }
 
-  input, select, button {
-    width: 100%;
-    padding: 8px;
-    margin: 8px 0 12px;
-    background: var(--input-bg);
-    border: 1px solid var(--input-border);
-    border-radius: 6px;
-    color: var(--text-color);
-    font-size: 14px;
-    box-sizing: border-box;
-  }
+    #map {
+      width: 70vw;
+      height: 100%;
+    }
 
-  button {
-    background: #232327;
-    cursor: pointer;
-  }
+    /* ===================================
+       Прав панель
+       =================================== */
+    #panel {
+      width: 30vw;
+      padding: 10px;
+      background: var(--panel-bg);
+      border-left: 1px solid var(--input-border);
+      overflow-y: auto;
+    }
 
-  body.theme-light button {
-    background: #e2e2f0;
-  }
+    input, select, button {
+      width: 100%;
+      padding: 7px;
+      margin-top: 8px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--text);
+      border-radius: 6px;
+    }
 
-  button:hover {
-    filter: brightness(1.05);
-  }
+    button {
+      cursor: pointer;
+    }
 
-  .target-item {
-    border: 1px solid var(--card-border);
-    padding: 10px;
-    margin-bottom: 10px;
-    background: var(--card-bg);
-    border-radius: 6px;
-  }
-
-  #themeToggle {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    z-index: 1100;
-    padding: 6px 10px;
-    font-size: 13px;
-    border-radius: 999px;
-    border: 1px solid #333;
-    background: rgba(20, 20, 24, 0.9);
-    color: #e1e1e7;
-    cursor: pointer;
-    backdrop-filter: blur(6px);
-  }
-
-  body.theme-light #themeToggle {
-    background: rgba(245, 245, 248, 0.9);
-    color: #111;
-    border-color: #ccc;
-  }
-</style>
-
+    .target-item {
+      border: 1px solid var(--input-border);
+      padding: 8px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+    }
+  </style>
 </head>
+
 <body>
-  <button id="themeToggle">🌙 Темна тема</button>
+  <!-- =======================
+       TOP BAR
+       ======================= -->
+  <div id="themeBar">
+    <button id="themeToggle">🌞 Світла тема</button>
+  </div>
+
+  <!-- =======================
+       Основний макет
+       ======================= -->
   <div id="wrap">
     <div id="map"></div>
+
     <div id="panel">
-      <!-- тут все, що вже було -->
+      <h3>Додати ціль</h3>
+
+      <label>Тип</label>
+      <select id="type">
+        <option value="x101">Х-101</option>
+        <option value="shahed">Shahed-136</option>
+        <option value="iskander">Іскандер</option>
+      </select>
+
+      <label>Lat / Lon (клік по карті)</label>
+      <input id="lat" placeholder="Широта">
+      <input id="lon" placeholder="Довгота">
+
+      <label>Напрямок</label>
+      <select id="dir">
+        <option value="N">Північ</option>
+        <option value="NE">Пн-Сх</option>
+        <option value="E">Схід</option>
+        <option value="SE">Пд-Сх</option>
+        <option value="S">Південь</option>
+        <option value="SW">Пд-Зх</option>
+        <option value="W">Захід</option>
+        <option value="NW">Пн-Зх</option>
+      </select>
+
+      <label>Швидкість</label>
+      <input id="speed" value="0.0003">
+
+      <button id="addBtn">Додати</button>
+      <button id="clearBtn">Очистити всі</button>
+
+      <h3>Список</h3>
+      <div id="list"></div>
     </div>
   </div>
 
-<div id="wrap">
-    <div id="map"></div>
 
-    <div id="panel">
-        <h2>Додати ціль</h2>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-        <label>Тип</label>
-        <select id="type">
-            <option value="x101">X-101</option>
-            <option value="shahed">Shahed</option>
-            <option value="iskander">Iskander</option>
-            <option value="kalibr">Kalibr</option>
-        </select>
+  <script>
+    /* ============================================
+       КАРТА
+       ============================================ */
+    const map = L.map("map").setView([49, 31], 6);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-        <label>Lat</label><input id="lat">
-        <label>Lon</label><input id="lon">
+    map.on("click", e => {
+      lat.value = e.latlng.lat.toFixed(5);
+      lon.value = e.latlng.lng.toFixed(5);
+    });
 
-        <label>Напрямок</label>
-        <select id="dir">
-            <option value="N">Північ</option>
-            <option value="NE">Пн-Сх</option>
-            <option value="E">Схід</option>
-            <option value="SE">Пд-Сх</option>
-            <option value="S">Південь</option>
-            <option value="SW">Пд-Зх</option>
-            <option value="W">Захід</option>
-            <option value="NW">Пн-Зх</option>
-        </select>
-
-        <label>Швидкість</label>
-        <input id="speed" value="0.03">
-
-        <button id="add">Додати</button>
-        <button id="clear">Очистити все</button>
-
-        <h3>Список</h3>
-        <div id="list"></div>
-    </div>
-</div>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
-const map = L.map("map").setView([49,31],6);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-map.on("click", e => {
-    lat.value = e.latlng.lat.toFixed(5);
-    lon.value = e.latlng.lng.toFixed(5);
-});
-
-// ПРАВИЛЬНІ вектори
-function dirToVector(d){
-    switch(d){
-        case "N":  return {dx:0, dy:+1};
-        case "NE": return {dx:+1, dy:+1};
-        case "E":  return {dx:+1, dy:0};
-        case "SE": return {dx:+1, dy:-1};
-        case "S":  return {dx:0, dy:-1};
-        case "SW": return {dx:-1, dy:-1};
-        case "W":  return {dx:-1, dy:0};
-        case "NW": return {dx:-1, dy:+1};
+    /* ============================================
+       ВЕКТОРИ руху
+       ============================================ */
+    function dirToVector(dir) {
+      switch (dir) {
+        case "N":  return { dx: 0, dy: 0.02 };
+        case "NE": return { dx: 0.02, dy: 0.02 };
+        case "E":  return { dx: 0.02, dy: 0 };
+        case "SE": return { dx: 0.02, dy: -0.02 };
+        case "S":  return { dx: 0, dy: -0.02 };
+        case "SW": return { dx: -0.02, dy: -0.02 };
+        case "W":  return { dx: -0.02, dy: 0 };
+        case "NW": return { dx: -0.02, dy: 0.02 };
+      }
     }
-}
 
-const ws = new WebSocket(`wss://${location.host}`);
-let targets = [];
+    /* ============================================
+       WS
+       ============================================ */
+    const ws = new WebSocket(`ws://${location.host}`);
 
-ws.onmessage = e => {
-    const d = JSON.parse(e.data);
-    if (d.type === "state") {
-        targets = d.targets;
+    let currentTargets = [];
+
+    ws.onmessage = ev => {
+      const data = JSON.parse(ev.data);
+      if (data.type === "state") {
+        currentTargets = data.targets;
         renderList();
-    }
-};
-
-
-// =========================
-// НОВИЙ СПИСОК ЦІЛЕЙ
-// =========================
-function renderList() {
-  list.innerHTML = "";
-
-  targets.forEach(t => {
-    const item = document.createElement("div");
-    item.className = "target-item";
-    item.style.border = "1px solid #333";
-    item.style.padding = "8px";
-    item.style.marginBottom = "8px";
-    item.style.background = "#202020";
-    item.style.borderRadius = "6px";
-
-    item.innerHTML = `
-      <b>Тип:</b> ${t.type}<br>
-      <b>ID:</b> ${t.id}<br>
-      <b>Lat:</b> ${t.lat.toFixed(4)}<br>
-      <b>Lon:</b> ${t.lon.toFixed(4)}<br>
-      <button class="delBtn" data-id="${t.id}"
-        style="
-          margin-top:6px;
-          width:100%;
-          padding:6px;
-          background:#550000;
-          border:1px solid #992222;
-          border-radius:4px;
-          color:#eee;
-          cursor:pointer;
-        ">
-        ❌ Видалити
-      </button>
-    `;
-
-    list.appendChild(item);
-  });
-
-  document.querySelectorAll(".delBtn").forEach(btn => {
-    btn.onclick = () => {
-      ws.send(JSON.stringify({
-        role: "admin",
-        action: "remove",
-        id: btn.dataset.id
-      }));
+      }
     };
-  });
-}
 
+    function send(o) {
+      ws.send(JSON.stringify(o));
+    }
 
-add.onclick = ()=>{
-    const v = dirToVector(dir.value);
-    ws.send(JSON.stringify({
-        role:"admin",
-        action:"add",
-        target:{
-            type:type.value,
-            lat:+lat.value,
-            lon:+lon.value,
-            dx:v.dx,
-            dy:v.dy,
-            speed:+speed.value
+    /* ============================================
+       ДОДАТИ ціль
+       ============================================ */
+    addBtn.onclick = () => {
+      if (!lat.value || !lon.value) {
+        alert("Клікни на карту!");
+        return;
+      }
+
+      const { dx, dy } = dirToVector(dir.value);
+
+      send({
+        role: "admin",
+        action: "add",
+        target: {
+          type: type.value,
+          lat: +lat.value,
+          lon: +lon.value,
+          dx, dy,
+          speed: +speed.value
         }
-    }));
-};
+      });
+    };
 
-clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
+    clearBtn.onclick = () => {
+      send({ role: "admin", action: "clear" });
+    };
 
-const THEME_KEY = "airmon_theme";
-  const themeBtn = document.getElementById("themeToggle");
+    /* ============================================
+       СПИСОК
+       ============================================ */
+    function renderList() {
+      list.innerHTML = "";
 
-  function applyTheme(theme) {
-    document.body.classList.remove("theme-dark", "theme-light");
-    document.body.classList.add(theme);
+      currentTargets.forEach(t => {
+        const div = document.createElement("div");
+        div.className = "target-item";
+        div.innerHTML = `
+          <b>${t.type}</b><br>
+          ID: ${t.id}<br>
+          Lat: ${t.lat.toFixed(3)}, Lon: ${t.lon.toFixed(3)}<br>
+          <button data-id="${t.id}" class="del">Видалити</button>
+        `;
+        list.appendChild(div);
+      });
 
-    if (theme === "theme-dark") {
-      themeBtn.textContent = "☀️ Світла тема";
-    } else {
-      themeBtn.textContent = "🌙 Темна тема";
+      document.querySelectorAll(".del").forEach(btn => {
+        btn.onclick = () => {
+          send({ role: "admin", action: "remove", id: btn.dataset.id });
+        };
+      });
     }
 
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch (e) {}
-  }
+    /* ============================================
+       ТЕМА
+       ============================================ */
+    const btn = document.getElementById("themeToggle");
 
-  (function initTheme() {
-    let saved = null;
-    try {
-      saved = localStorage.getItem(THEME_KEY);
-    } catch (e) {}
+    btn.onclick = () => {
+      document.body.classList.toggle("light");
 
-    if (saved !== "theme-dark" && saved !== "theme-light") {
-      saved = "theme-dark";
-    }
-    applyTheme(saved);
-  })();
-
-  themeBtn.addEventListener("click", () => {
-    const current = document.body.classList.contains("theme-dark")
-      ? "theme-dark"
-      : "theme-light";
-    const next = current === "theme-dark" ? "theme-light" : "theme-dark";
-    applyTheme(next);
-  });
-</script>    
-
+      if (document.body.classList.contains("light")) {
+        btn.textContent = "🌙 Темна тема";
+      } else {
+        btn.textContent = "🌞 Світла тема";
+      }
+    };
+  </script>
 </body>
 </html>
+
+
 
 
 
