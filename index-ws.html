@@ -15,13 +15,35 @@
     height: 100vh;
     filter: brightness(1.1); /* трохи підсвітити темну карту */
   }
+  #themeToggle {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 9999;
+  padding: 8px 14px;
+  background: rgba(20,20,20,0.85);
+  color: #eee;
+  border: 1px solid #555;
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  font-size: 14px;
+}
+
+body.light #themeToggle {
+  background: rgba(255,255,255,0.9);
+  color: #111;
+  border: 1px solid #ccc;
+}
+
 </style>
 
 </head>
 <body>
   <button id="themeToggle">🌙 Темна тема</button>
   <div id="map"></div>
-<div id="map"></div>
+</body>
+
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
@@ -110,48 +132,47 @@ ws.onmessage = e =>{
     if (d.type==="state") update(d.targets);
 };
     
-const THEME_KEY = "airmon_theme";
-  const themeBtn = document.getElementById("themeToggle");
+const themeBtn = document.getElementById("themeToggle");
 
+  // два варіанти тайлів
+  const LIGHT_TILE = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png");
+  const DARK_TILE = L.tileLayer(
+    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    { subdomains: "abcd", maxZoom: 19 }
+  );
+
+  // Поточна тема
+  let currentTheme = localStorage.getItem("viewerTheme") || "dark";
+
+  // Підключаємо тайл за темою
   function applyTheme(theme) {
-    document.body.classList.remove("theme-dark", "theme-light");
-    document.body.classList.add(theme);
-
-    if (theme === "theme-dark") {
-      themeBtn.textContent = "☀️ Світла тема";
-    } else {
+    if (theme === "light") {
+      map.removeLayer(DARK_TILE);
+      LIGHT_TILE.addTo(map);
       themeBtn.textContent = "🌙 Темна тема";
+      document.body.classList.add("light");
+    } else {
+      map.removeLayer(LIGHT_TILE);
+      DARK_TILE.addTo(map);
+      themeBtn.textContent = "☀️ Світла тема";
+      document.body.classList.remove("light");
     }
-
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch (e) {}
+    localStorage.setItem("viewerTheme", theme);
+    currentTheme = theme;
   }
 
-  // стартова тема
-  (function initTheme() {
-    let saved = null;
-    try {
-      saved = localStorage.getItem(THEME_KEY);
-    } catch (e) {}
+  // Початкове застосування
+  applyTheme(currentTheme);
 
-    if (saved !== "theme-dark" && saved !== "theme-light") {
-      saved = "theme-dark"; // дефолт
-    }
-    applyTheme(saved);
-  })();
-
-  themeBtn.addEventListener("click", () => {
-    const current = document.body.classList.contains("theme-dark")
-      ? "theme-dark"
-      : "theme-light";
-    const next = current === "theme-dark" ? "theme-light" : "theme-dark";
-    applyTheme(next);
-  });
+  // Обробник натискання
+  themeBtn.onclick = () => {
+    applyTheme(currentTheme === "dark" ? "light" : "dark");
+  };
 </script>
 
 </body>
 </html>
+
 
 
 
