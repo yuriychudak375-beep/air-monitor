@@ -5,14 +5,133 @@
 <title>Admin Panel</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <style>
-body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
-#wrap{display:flex;height:100vh;}
-#map{width:70vw;}
-#panel{width:30vw;padding:10px;background:#181818;}
-input,select,button{width:100%;padding:6px;margin:6px 0;background:#222;color:#eee;border:1px solid #555;}
+  :root {
+    --bg-color: #0d0d0f;
+    --text-color: #e1e1e7;
+    --panel-bg: #141416;
+    --panel-border: #2a2a2d;
+    --input-bg: #1c1c20;
+    --input-border: #333;
+    --card-bg: #1a1a1d;
+    --card-border: #2a2a2d;
+    --map-filter: brightness(0.85) contrast(1.1);
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: "Inter", Arial, sans-serif;
+  }
+
+  body.theme-dark {
+    --bg-color: #0d0d0f;
+    --text-color: #e1e1e7;
+    --panel-bg: #141416;
+    --panel-border: #2a2a2d;
+    --input-bg: #1c1c20;
+    --input-border: #333;
+    --card-bg: #1a1a1d;
+    --card-border: #2a2a2d;
+    --map-filter: brightness(0.85) contrast(1.1);
+  }
+
+  body.theme-light {
+    --bg-color: #f2f2f6;
+    --text-color: #111111;
+    --panel-bg: #ffffff;
+    --panel-border: #d0d0d5;
+    --input-bg: #f4f4f7;
+    --input-border: #c8c8d0;
+    --card-bg: #ffffff;
+    --card-border: #d0d0d5;
+    --map-filter: brightness(1) contrast(1);
+  }
+
+  #wrap {
+    display: flex;
+    height: 100vh;
+  }
+
+  #map {
+    width: 70vw;
+    height: 100vh;
+    filter: var(--map-filter);
+  }
+
+  #panel {
+    width: 30vw;
+    padding: 14px;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--panel-border);
+    box-sizing: border-box;
+    overflow-y: auto;
+  }
+
+  input, select, button {
+    width: 100%;
+    padding: 8px;
+    margin: 8px 0 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+
+  button {
+    background: #232327;
+    cursor: pointer;
+  }
+
+  body.theme-light button {
+    background: #e2e2f0;
+  }
+
+  button:hover {
+    filter: brightness(1.05);
+  }
+
+  .target-item {
+    border: 1px solid var(--card-border);
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--card-bg);
+    border-radius: 6px;
+  }
+
+  #themeToggle {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1100;
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 999px;
+    border: 1px solid #333;
+    background: rgba(20, 20, 24, 0.9);
+    color: #e1e1e7;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+
+  body.theme-light #themeToggle {
+    background: rgba(245, 245, 248, 0.9);
+    color: #111;
+    border-color: #ccc;
+  }
 </style>
+
 </head>
 <body>
+  <button id="themeToggle">🌙 Темна тема</button>
+  <div id="wrap">
+    <div id="map"></div>
+    <div id="panel">
+      <!-- тут все, що вже було -->
+    </div>
+  </div>
 
 <div id="wrap">
     <div id="map"></div>
@@ -157,8 +276,47 @@ add.onclick = ()=>{
 };
 
 clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
-</script>
+
+const THEME_KEY = "airmon_theme";
+  const themeBtn = document.getElementById("themeToggle");
+
+  function applyTheme(theme) {
+    document.body.classList.remove("theme-dark", "theme-light");
+    document.body.classList.add(theme);
+
+    if (theme === "theme-dark") {
+      themeBtn.textContent = "☀️ Світла тема";
+    } else {
+      themeBtn.textContent = "🌙 Темна тема";
+    }
+
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (e) {}
+  }
+
+  (function initTheme() {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(THEME_KEY);
+    } catch (e) {}
+
+    if (saved !== "theme-dark" && saved !== "theme-light") {
+      saved = "theme-dark";
+    }
+    applyTheme(saved);
+  })();
+
+  themeBtn.addEventListener("click", () => {
+    const current = document.body.classList.contains("theme-dark")
+      ? "theme-dark"
+      : "theme-light";
+    const next = current === "theme-dark" ? "theme-light" : "theme-dark";
+    applyTheme(next);
+  });
+</script>    
 
 </body>
 </html>
+
 
