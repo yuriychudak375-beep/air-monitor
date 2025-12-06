@@ -5,12 +5,65 @@
 <title>Monitor</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <style>
-body{margin:0;background:#111;}
-#map{width:100vw;height:100vh;}
+  :root {
+    --bg-color: #0d0d0f;
+    --text-color: #e1e1e7;
+    --map-filter: brightness(0.85) contrast(1.05) saturate(1.05);
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: "Inter", Arial, sans-serif;
+  }
+
+  /* Темна тема */
+  body.theme-dark {
+    --bg-color: #0d0d0f;
+    --text-color: #e1e1e7;
+    --map-filter: brightness(0.85) contrast(1.05) saturate(1.05);
+  }
+
+  /* Світла тема */
+  body.theme-light {
+    --bg-color: #f2f2f5;
+    --text-color: #111111;
+    --map-filter: brightness(1) contrast(1) saturate(1);
+  }
+
+  #map {
+    width: 100vw;
+    height: 100vh;
+    filter: var(--map-filter);
+  }
+
+  #themeToggle {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 999px;
+    border: 1px solid #333;
+    background: rgba(20, 20, 24, 0.9);
+    color: #e1e1e7;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+
+  body.theme-light #themeToggle {
+    background: rgba(245, 245, 248, 0.9);
+    color: #111;
+    border-color: #ccc;
+  }
 </style>
+
 </head>
 <body>
-
+  <button id="themeToggle">🌙 Темна тема</button>
+  <div id="map"></div>
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -91,8 +144,47 @@ ws.onmessage = e =>{
     const d = JSON.parse(e.data);
     if (d.type==="state") update(d.targets);
 };
+    
+const THEME_KEY = "airmon_theme";
+  const themeBtn = document.getElementById("themeToggle");
 
+  function applyTheme(theme) {
+    document.body.classList.remove("theme-dark", "theme-light");
+    document.body.classList.add(theme);
+
+    if (theme === "theme-dark") {
+      themeBtn.textContent = "☀️ Світла тема";
+    } else {
+      themeBtn.textContent = "🌙 Темна тема";
+    }
+
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (e) {}
+  }
+
+  // стартова тема
+  (function initTheme() {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(THEME_KEY);
+    } catch (e) {}
+
+    if (saved !== "theme-dark" && saved !== "theme-light") {
+      saved = "theme-dark"; // дефолт
+    }
+    applyTheme(saved);
+  })();
+
+  themeBtn.addEventListener("click", () => {
+    const current = document.body.classList.contains("theme-dark")
+      ? "theme-dark"
+      : "theme-light";
+    const next = current === "theme-dark" ? "theme-light" : "theme-dark";
+    applyTheme(next);
+  });
 </script>
 
 </body>
 </html>
+
