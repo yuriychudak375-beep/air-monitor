@@ -35,11 +35,27 @@ body.light #themeToggle {
   color: #111;
   border: 1px solid #ccc;
 }
+#clockBox {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  backdrop-filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+}
 
 </style>
 
 </head>
 <body>
+  <div id="clockBox"></div>
   <button id="themeToggle">🌙 Темна тема</button>
   <div id="map"></div>
 </body>
@@ -58,7 +74,29 @@ L.tileLayer(
     maxZoom: 19
   }
 ).addTo(map);
+  
+function updateClock() {
+    const box = document.getElementById("clockBox");
+    const now = new Date();
 
+    const dateStr = now.toLocaleDateString("uk-UA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
+    });
+
+    const timeStr = now.toLocaleTimeString("uk-UA", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+
+    box.textContent = `${dateStr} — ${timeStr}`;
+  }
+
+  setInterval(updateClock, 1000);
+  updateClock();
+  
 const ICONS = {
     x101: "models/x101.png",
     shahed: "models/shahed.png",
@@ -172,6 +210,7 @@ const themeBtn = document.getElementById("themeToggle");
 
 </body>
 </html>
+
 
 
 
