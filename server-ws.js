@@ -89,10 +89,16 @@ setInterval(() => {
 
 }, 1000);
 
+// --- Anti-sleep ping (Render fix) ---
+setInterval(() => {
+  fetch("https://air-monitor-8chp.onrender.com").catch(() => {});
+}, 9 * 60 * 1000); // кожні 9 хвилин
+
 // ======= START SERVER =======
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
 
 
