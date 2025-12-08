@@ -1,290 +1,151 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Адмін — WS режим</title>
-
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-
+  <meta charset="utf-8">
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
   <style>
-    /* ===================================
-       ТЕМИ (CSS змінні)
-       =================================== */
-    :root {
-      --bg: #111;
-      --panel-bg: #181818;
-      --text: #eee;
-      --input-bg: #222;
-      --input-border: #555;
+    body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
+    #wrap{display:flex;height:100vh;}
+    #map{width:70vw;}
+    #panel{width:30vw;padding:10px;background:#181818;overflow-y:auto;}
+    input,select,button{
+      width:100%;padding:6px;margin:6px 0;
+      background:#222;color:#eee;border:1px solid #555;
     }
-    .light {
-      --bg: #f5f5f5;
-      --panel-bg: #fff;
-      --text: #000;
-      --input-bg: #eee;
-      --input-border: #ccc;
+    .target-item{
+      border:1px solid #333;
+      padding:6px;
+      margin:4px 0;
+      font-size:13px;
     }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-    }
-
-    /* ===================================
-       Топ бар (перемикач теми)
-       =================================== */
-    #themeBar {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 40px;
-      background: var(--panel-bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      border-bottom: 1px solid var(--input-border);
-    }
-
-    #themeToggle {
-      background: var(--input-bg);
-      color: var(--text);
-      border: 1px solid var(--input-border);
-      padding: 5px 15px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    /* ===================================
-       Основний контейнер
-       =================================== */
-    #wrap {
-      display: flex;
-      margin-top: 40px; /* бо top-bar 40px */
-      height: calc(100vh - 40px);
-      width: 100vw;
-    }
-
-    #map {
-      width: 70vw;
-      height: 100%;
-    }
-
-    /* ===================================
-       Прав панель
-       =================================== */
-    #panel {
-      width: 30vw;
-      padding: 10px;
-      background: var(--panel-bg);
-      border-left: 1px solid var(--input-border);
-      overflow-y: auto;
-    }
-
-    input, select, button {
-      width: 100%;
-      padding: 7px;
-      margin-top: 8px;
-      background: var(--input-bg);
-      border: 1px solid var(--input-border);
-      color: var(--text);
-      border-radius: 6px;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    .target-item {
-      border: 1px solid var(--input-border);
-      padding: 8px;
-      margin-bottom: 6px;
-      border-radius: 6px;
+    .target-item button{
+      width:auto;
+      padding:4px 8px;
+      font-size:12px;
+      margin-top:4px;
     }
   </style>
 </head>
-
 <body>
-  <!-- =======================
-       TOP BAR
-       ======================= -->
-  <div id="themeBar">
-    <button id="themeToggle">🌞 Світла тема</button>
+
+<div id="wrap">
+  <div id="map"></div>
+
+  <div id="panel">
+    <h2>Додати ціль</h2>
+
+    <label>Тип</label>
+    <select id="type">
+      <option value="x101">X-101</option>
+      <option value="shahed">Shahed</option>
+      <option value="iskander">Iskander</option>
+      <option value="kalibr">Kalibr</option>
+    </select>
+
+    <label>Lat</label><input id="lat">
+    <label>Lon</label><input id="lon">
+
+    <label>Напрямок</label>
+    <select id="dir">
+      <option value="N">Північ</option>
+      <option value="NE">Пн-Сх</option>
+      <option value="E">Схід</option>
+      <option value="SE">Пд-Сх</option>
+      <option value="S">Південь</option>
+      <option value="SW">Пд-Зх</option>
+      <option value="W">Захід</option>
+      <option value="NW">Пн-Зх</option>
+    </select>
+
+    <label>Швидкість</label>
+    <input id="speed" value="0.03">
+
+    <button id="add">Додати</button>
+    <button id="clear">Очистити все</button>
+
+    <h3>Список</h3>
+    <div id="list"></div>
   </div>
+</div>
 
-  <!-- =======================
-       Основний макет
-       ======================= -->
-  <div id="wrap">
-    <div id="map"></div>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+const map = L.map("map").setView([49,31],6);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-    <div id="panel">
-      <h3>Додати ціль</h3>
+map.on("click", e => {
+  lat.value = e.latlng.lat.toFixed(5);
+  lon.value = e.latlng.lng.toFixed(5);
+});
 
-      <label>Тип</label>
-      <select id="type">
-        <option value="x101">Х-101</option>
-        <option value="shahed">Shahed-136</option>
-        <option value="iskander">Іскандер</option>
-        <option value="kalibr">Калібр</option>
-      </select>
+// ПРАВИЛЬНІ вектори (як у тебе було)
+function dirToVector(d){
+  switch(d){
+    case "N":  return {dx:0, dy:+1};
+    case "NE": return {dx:+1, dy:+1};
+    case "E":  return {dx:+1, dy:0};
+    case "SE": return {dx:+1, dy:-1};
+    case "S":  return {dx:0, dy:-1};
+    case "SW": return {dx:-1, dy:-1};
+    case "W":  return {dx:-1, dy:0};
+    case "NW": return {dx:-1, dy:+1};
+  }
+}
 
-      <label>Lat / Lon (клік по карті)</label>
-      <input id="lat" placeholder="Широта">
-      <input id="lon" placeholder="Довгота">
+const ws = new WebSocket(`wss://${location.host}`);
+let targets = [];
 
-      <label>Напрямок</label>
-      <select id="dir">
-        <option value="N">Північ</option>
-        <option value="NE">Пн-Сх</option>
-        <option value="E">Схід</option>
-        <option value="SE">Пд-Сх</option>
-        <option value="S">Південь</option>
-        <option value="SW">Пд-Зх</option>
-        <option value="W">Захід</option>
-        <option value="NW">Пн-Зх</option>
-      </select>
+ws.onmessage = e => {
+  const d = JSON.parse(e.data);
+  if (d.type==="state") {
+    targets = d.targets || [];
+    renderList();
+  }
+};
 
-      <label>Швидкість</label>
-      <input id="speed" value="0.0003">
-
-      <button id="addBtn">Додати</button>
-      <button id="clearBtn">Очистити всі</button>
-
-      <h3>Список</h3>
-      <div id="list"></div>
-    </div>
-  </div>
-
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-  <script>
-    /* ============================================
-       КАРТА
-       ============================================ */
-    const map = L.map("map").setView([49, 31], 6);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-    map.on("click", e => {
-      lat.value = e.latlng.lat.toFixed(5);
-      lon.value = e.latlng.lng.toFixed(5);
-    });
-
-    /* ============================================
-       ВЕКТОРИ руху
-       ============================================ */
-    function dirToVector(dir) {
-      switch (dir) {
-        case "N":  return { dx: 0, dy: 0.02 };
-        case "NE": return { dx: 0.02, dy: 0.02 };
-        case "E":  return { dx: 0.02, dy: 0 };
-        case "SE": return { dx: 0.02, dy: -0.02 };
-        case "S":  return { dx: 0, dy: -0.02 };
-        case "SW": return { dx: -0.02, dy: -0.02 };
-        case "W":  return { dx: -0.02, dy: 0 };
-        case "NW": return { dx: -0.02, dy: 0.02 };
-      }
-    }
-
-    /* ============================================
-       WS
-       ============================================ */
-    const ws = new WebSocket(
-    (location.protocol === "https:" ? "wss://" : "ws://") + location.host
-);
-
-    let currentTargets = [];
-
-    ws.onmessage = ev => {
-      const data = JSON.parse(ev.data);
-      if (data.type === "state") {
-        currentTargets = data.targets;
-        renderList();
-      }
-    };
-
-    function send(o) {
-      ws.send(JSON.stringify(o));
-    }
-
-    /* ============================================
-       ДОДАТИ ціль
-       ============================================ */
-    addBtn.onclick = () => {
-      if (!lat.value || !lon.value) {
-        alert("Клікни на карту!");
-        return;
-      }
-
-      const { dx, dy } = dirToVector(dir.value);
-
-      send({
-        role: "admin",
-        action: "add",
-        target: {
-          type: type.value,
-          lat: +lat.value,
-          lon: +lon.value,
-          dx, dy,
-          speed: +speed.value
-        }
-      });
-    };
-
-    clearBtn.onclick = () => {
-      send({ role: "admin", action: "clear" });
-    };
-
-    /* ============================================
-       СПИСОК
-       ============================================ */
-    function renderList() {
-      list.innerHTML = "";
-
-      currentTargets.forEach(t => {
-        const div = document.createElement("div");
-        div.className = "target-item";
-        div.innerHTML = `
-          <b>${t.type}</b><br>
-          ID: ${t.id}<br>
-          Lat: ${t.lat.toFixed(3)}, Lon: ${t.lon.toFixed(3)}<br>
-          <button data-id="${t.id}" class="del">Видалити</button>
-        `;
-        list.appendChild(div);
-      });
-
-      document.querySelectorAll(".del").forEach(btn => {
-        btn.onclick = () => {
-          send({ role: "admin", action: "remove", id: btn.dataset.id });
-        };
-      });
-    }
-
-    /* ============================================
-       ТЕМА
-       ============================================ */
-    const btn = document.getElementById("themeToggle");
-
+function renderList() {
+  list.innerHTML = "";
+  targets.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "target-item";
+    div.innerHTML = `
+      <b>${t.type}</b><br>
+      ID: ${t.id}<br>
+      Lat: ${t.lat.toFixed(3)}, Lon: ${t.lon.toFixed(3)}<br>
+    `;
+    const btn = document.createElement("button");
+    btn.textContent = "Видалити";
     btn.onclick = () => {
-      document.body.classList.toggle("light");
-
-      if (document.body.classList.contains("light")) {
-        btn.textContent = "🌙 Темна тема";
-      } else {
-        btn.textContent = "🌞 Світла тема";
-      }
+      ws.send(JSON.stringify({
+        role:"admin",
+        action:"remove",
+        id: t.id
+      }));
     };
-  </script>
+    div.appendChild(btn);
+    list.appendChild(div);
+  });
+}
+
+add.onclick = ()=>{
+  const v = dirToVector(dir.value);
+  ws.send(JSON.stringify({
+    role:"admin",
+    action:"add",
+    target:{
+      type:type.value,
+      lat:+lat.value,
+      lon:+lon.value,
+      dx:v.dx,
+      dy:v.dy,
+      speed:+speed.value
+    }
+  }));
+};
+
+clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
+</script>
+
 </body>
 </html>
-
-
-
-
-
-
