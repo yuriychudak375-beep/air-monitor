@@ -100,17 +100,13 @@ let lastAlerts = [];
 async function fetchAlerts() {
     try {
         const url =
-            "https://api.alerts.in.ua/v1/alerts/active.json?token=50384ea5708d0490af5054940304a4eda4413fbdab2203" +
-            ALERTS_TOKEN;
+            "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
 
-        const res = await fetch(url);
+        console.log("ALERT URL:", url);   // ← ОТ СЮДИ, БРАТ
 
-        if (!res.ok) {
-            console.log("🛑 ALERT API ERROR:", res.status);
-            return;
-        }
+        const response = await fetch(url);
+        const data = await response.json();
 
-        const json = await res.json();
 
         // json.alerts = масив об'єктів (області, райони, громади)
         const active = json.alerts
@@ -147,6 +143,7 @@ fetchAlerts();
 server.listen(PORT, () => {
     console.log("🌐 SERVER RUNNING ON PORT", PORT);
 });
+
 
 
 
