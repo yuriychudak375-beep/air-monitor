@@ -22,7 +22,7 @@ const wss = new WebSocketServer({ server });
 const PORT = process.env.PORT || 3000;
 
 // роздаємо всі файли з поточної папки
-app.use(express.static("."));
+app.use(express.static(".")); 
 
 // ================================
 // 2. Збереження цілей
@@ -175,4 +175,5 @@ fetchAlerts();
 server.listen(PORT, () => {
   console.log("🌐 SERVER RUNNING ON PORT", PORT);
 });
+
 
