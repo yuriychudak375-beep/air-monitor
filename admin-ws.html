@@ -1,75 +1,57 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Admin Panel</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-  <style>
-    body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
-    #wrap{display:flex;height:100vh;}
-    #map{
-      width:70vw;
-      height:100vh;   /* ← ОЦЕ ГОЛОВНЕ */
-    }
-    #panel{width:30vw;padding:10px;background:#181818;overflow-y:auto;}
-    input,select,button{
-      width:100%;padding:6px;margin:6px 0;
-      background:#222;color:#eee;border:1px solid #555;
-    }
-    .target-item{
-      border:1px solid #333;
-      padding:6px;
-      margin:4px 0;
-      font-size:13px;
-    }
-    .target-item button{
-      width:auto;
-      padding:4px 8px;
-      font-size:12px;
-      margin-top:4px;
-    }
-  </style>
+<meta charset="utf-8">
+<title>Admin Panel</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+<style>
+body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
+#wrap{display:flex;height:100vh;}
+#map{width:70vw;}
+#panel{width:30vw;padding:10px;background:#181818;}
+input,select,button{width:100%;padding:6px;margin:6px 0;background:#222;color:#eee;border:1px solid #555;}
+</style>
 </head>
 <body>
 
 <div id="wrap">
-  <div id="map"></div>
+    <div id="map"></div>
 
-  <div id="panel">
-    <h2>Додати ціль</h2>
+    <div id="panel">
+        <h2>Додати ціль</h2>
 
-    <label>Тип</label>
-    <select id="type">
-      <option value="x101">X-101</option>
-      <option value="shahed">Shahed</option>
-      <option value="iskander">Iskander</option>
-      <option value="kalibr">Kalibr</option>
-    </select>
+        <label>Тип</label>
+        <select id="type">
+            <option value="x101">X-101</option>
+            <option value="shahed">Shahed</option>
+            <option value="iskander">Iskander</option>
+            <option value="kalibr">Kalibr</option>
+        </select>
 
-    <label>Lat</label><input id="lat">
-    <label>Lon</label><input id="lon">
+        <label>Lat</label><input id="lat">
+        <label>Lon</label><input id="lon">
 
-    <label>Напрямок</label>
-    <select id="dir">
-      <option value="N">Північ</option>
-      <option value="NE">Пн-Сх</option>
-      <option value="E">Схід</option>
-      <option value="SE">Пд-Сх</option>
-      <option value="S">Південь</option>
-      <option value="SW">Пд-Зх</option>
-      <option value="W">Захід</option>
-      <option value="NW">Пн-Зх</option>
-    </select>
+        <label>Напрямок</label>
+        <select id="dir">
+            <option value="N">Північ</option>
+            <option value="NE">Пн-Сх</option>
+            <option value="E">Схід</option>
+            <option value="SE">Пд-Сх</option>
+            <option value="S">Південь</option>
+            <option value="SW">Пд-Зх</option>
+            <option value="W">Захід</option>
+            <option value="NW">Пн-Зх</option>
+        </select>
 
-    <label>Швидкість</label>
-    <input id="speed" value="0.03">
+        <label>Швидкість</label>
+        <input id="speed" value="0.03">
 
-    <button id="add">Додати</button>
-    <button id="clear">Очистити все</button>
+        <button id="add">Додати</button>
+        <button id="clear">Очистити все</button>
 
-    <h3>Список</h3>
-    <div id="list"></div>
-  </div>
+        <h3>Список</h3>
+        <div id="list"></div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -78,76 +60,49 @@ const map = L.map("map").setView([49,31],6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
 map.on("click", e => {
-  lat.value = e.latlng.lat.toFixed(5);
-  lon.value = e.latlng.lng.toFixed(5);
+    lat.value = e.latlng.lat.toFixed(5);
+    lon.value = e.latlng.lng.toFixed(5);
 });
 
-// ПРАВИЛЬНІ вектори (як у тебе було)
+// ПРАВИЛЬНІ вектори
 function dirToVector(d){
-  switch(d){
-    case "N":  return {dx:0,  dy:+1};
-    case "NE": return {dx:+1, dy:+1};
-    case "E":  return {dx:+1, dy:0};
-    case "SE": return {dx:+1, dy:-1};
-    case "S":  return {dx:0,  dy:-1};
-    case "SW": return {dx:-1, dy:-1};
-    case "W":  return {dx:-1, dy:0};
-    case "NW": return {dx:-1, dy:+1};
-  }
-}
-
-  }
+    switch(d){
+        case "N":  return {dx:0, dy:+1};
+        case "NE": return {dx:+1, dy:+1};
+        case "E":  return {dx:+1, dy:0};
+        case "SE": return {dx:+1, dy:-1};
+        case "S":  return {dx:0, dy:-1};
+        case "SW": return {dx:-1, dy:-1};
+        case "W":  return {dx:-1, dy:0};
+        case "NW": return {dx:-1, dy:+1};
+    }
 }
 
 const ws = new WebSocket(`wss://${location.host}`);
 let targets = [];
 
 ws.onmessage = e => {
-  const d = JSON.parse(e.data);
-  if (d.type==="state") {
-    targets = d.targets || [];
-    renderList();
-  }
+    const d = JSON.parse(e.data);
+    if (d.type==="state") {
+        targets = d.targets;
+        list.innerHTML = targets.map(t=>`ID ${t.id} — ${t.type}`).join("<br>");
+    }
 };
 
-function renderList() {
-  list.innerHTML = "";
-  targets.forEach(t => {
-    const div = document.createElement("div");
-    div.className = "target-item";
-    div.innerHTML = `
-      <b>${t.type}</b><br>
-      ID: ${t.id}<br>
-      Lat: ${t.lat.toFixed(3)}, Lon: ${t.lon.toFixed(3)}<br>
-    `;
-    const btn = document.createElement("button");
-    btn.textContent = "Видалити";
-    btn.onclick = () => {
-      ws.send(JSON.stringify({
-        role:"admin",
-        action:"remove",
-        id: t.id
-      }));
-    };
-    div.appendChild(btn);
-    list.appendChild(div);
-  });
-}
-
 add.onclick = ()=>{
-  const v = dirToVector(dir.value);
-  ws.send(JSON.stringify({
-    role:"admin",
-    action:"add",
-    target:{
-      type:type.value,
-      lat:+lat.value,
-      lon:+lon.value,
-      dx:v.dx,
-      dy:v.dy,
-      speed:+speed.value
-    }
-  }));
+    const v = dirToVector(dir.value);
+    ws.send(JSON.stringify({
+        role:"admin",
+        action:"add",
+        target:{
+            type:type.value,
+            lat:+lat.value,
+            lon:+lon.value,
+            dx:v.dx,
+            dy:v.dy,
+            speed:+speed.value
+        }
+    }));
 };
 
 clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
@@ -155,6 +110,3 @@ clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
 
 </body>
 </html>
-
-
-
