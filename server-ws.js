@@ -102,24 +102,24 @@ async function fetchAlerts() {
         const url =
             "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
 
-        console.log("ALERT URL:", url);   // ← ОТ СЮДИ, БРАТ
+        console.log("ALERT URL:", url);
 
         const response = await fetch(url);
-        const data = await response.json();
+        const alerts = await response.json();   // тут масив, НЕ об’єкт
 
-
-        // json.alerts = масив об'єктів (області, райони, громади)
-        const active = json.alerts
+        // Фільтруємо лише повітряні тривоги
+        const active = alerts
             .filter(a => a.alert_type === "air_raid")
             .map(a => {
-                // пріоритет — район
                 if (a.location_raion) return a.location_raion.toLowerCase();
-                // fallback — область
-                return a.location_oblast.toLowerCase();
-            });
+                if (a.location_oblast) return a.location_oblast.toLowerCase();
+                return null;
+            })
+            .filter(Boolean);
 
         lastAlerts = active;
 
+        // Розсилка клієнтам
         broadcast({
             type: "alerts",
             regions: active
@@ -128,9 +128,10 @@ async function fetchAlerts() {
         console.log("🔔 ACTIVE ALERT REGIONS:", active);
 
     } catch (e) {
-        console.log("ALERT FETCH FAILED", e);
+        console.log("ALERT FETCH FAILED:", e);
     }
 }
+
 
 // кожні 15 секунд оновлюємо тривоги
 setInterval(fetchAlerts, 15000);
@@ -143,6 +144,7 @@ fetchAlerts();
 server.listen(PORT, () => {
     console.log("🌐 SERVER RUNNING ON PORT", PORT);
 });
+
 
 
 
