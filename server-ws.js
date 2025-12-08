@@ -98,39 +98,43 @@ wss.on("connection", ws => {
 let lastAlerts = [];
 
 async function fetchAlerts() {
-    try {
-        const url =
-            "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
+  try {
+    const url =
+      "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
 
-        console.log("ALERT URL:", url);
+    console.log("ALERT URL:", url);
 
-        const response = await fetch(url);
-        const alerts = await response.json();   // тут масив, НЕ об’єкт
+    const response = await fetch(url);
+    const json = await response.json();          // <- це весь обʼєкт
 
-        // Фільтруємо лише повітряні тривоги
-        const active = alerts
-            .filter(a => a.alert_type === "air_raid")
-            .map(a => {
-                if (a.location_raion) return a.location_raion.toLowerCase();
-                if (a.location_oblast) return a.location_oblast.toLowerCase();
-                return null;
-            })
-            .filter(Boolean);
-
-        lastAlerts = active;
-
-        // Розсилка клієнтам
-        broadcast({
-            type: "alerts",
-            regions: active
-        });
-
-        console.log("🔔 ACTIVE ALERT REGIONS:", active);
-
-    } catch (e) {
-        console.log("ALERT FETCH FAILED:", e);
+    // якщо раптом помилка формату – логнемо і вийдемо
+    if (!json.alerts || !Array.isArray(json.alerts)) {
+      console.log("UNEXPECTED ALERTS FORMAT:", json);
+      return;
     }
+
+    const active = json.alerts
+      .filter((a) => a.alert_type === "air_raid") // тільки повітряні тривоги
+      .map((a) => {
+        if (a.location_raion) return a.location_raion.toLowerCase();
+        if (a.location_oblast) return a.location_oblast.toLowerCase();
+        return null;
+      })
+      .filter(Boolean);
+
+    lastAlerts = active;
+
+    broadcast({
+      type: "alerts",
+      regions: active,
+    });
+
+    console.log("🔔 ACTIVE ALERT REGIONS:", active);
+  } catch (e) {
+    console.log("ALERT FETCH FAILED:", e);
+  }
 }
+
 
 
 // кожні 15 секунд оновлюємо тривоги
@@ -144,6 +148,7 @@ fetchAlerts();
 server.listen(PORT, () => {
     console.log("🌐 SERVER RUNNING ON PORT", PORT);
 });
+
 
 
 
