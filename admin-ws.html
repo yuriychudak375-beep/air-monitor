@@ -7,7 +7,10 @@
   <style>
     body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
     #wrap{display:flex;height:100vh;}
-    #map{width:70vw;}
+    #map{
+      width:70vw;
+      height:100vh;   /* ← ОЦЕ ГОЛОВНЕ */
+    }
     #panel{width:30vw;padding:10px;background:#181818;overflow-y:auto;}
     input,select,button{
       width:100%;padding:6px;margin:6px 0;
@@ -152,5 +155,6 @@ clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
 
 </body>
 </html>
+
 
 
