@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
@@ -94,11 +96,46 @@ setInterval(() => {
   fetch("https://air-monitor-8chp.onrender.com").catch(() => {});
 }, 9 * 60 * 1000); // кожні 9 хвилин
 
+// ================================
+//     AIR ALERTS (alerts.in.ua)
+// ================================
+
+async function fetchAlerts() {
+  try {
+    const url = `https://api.alerts.in.ua/v1/alerts/active.json?token=${process.env.ALERTS_TOKEN}`;
+    const res = await fetch(url);
+
+    if (!res.ok) {
+      console.log("Alert API error:", res.status);
+      return;
+    }
+
+    const data = await res.json();
+
+    // data.states = ["lvivska", "odeska", ...]
+    const activeRegions = data.states || [];
+
+    // Відправляємо всім клієнтам
+    broadcast({
+      type: "alerts",
+      regions: activeRegions
+    });
+
+  } catch (e) {
+    console.log("Alert fetch failed:", e);
+  }
+}
+
+// кожні 10 секунд оновлюємо
+setInterval(fetchAlerts, 10000);
+fetchAlerts();
+
 // ======= START SERVER =======
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
 
 
 
