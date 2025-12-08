@@ -87,8 +87,8 @@ wss.on("connection", (ws) => {
 // ЛОГІКА ЯК У ТВОЄМУ СТАРОМУ ФАЙЛІ (НІЧОГО НЕ МІНЯЮ)
 setInterval(() => {
   targets.forEach((t) => {
-    t.lat += t.dx * t.speed;
-    t.lon += t.dy * t.speed;
+    t.lat += t.dy * t.speed;
+    t.lon += t.dx * t.speed;
   });
 
   broadcast({ type: "state", targets });
@@ -99,4 +99,5 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
 
