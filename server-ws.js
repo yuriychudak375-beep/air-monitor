@@ -1,5 +1,5 @@
 // ================================
-//  AIR-MONITOR main server
+//  AIR-MONITOR — сервер
 // ================================
 
 const express = require("express");
@@ -7,32 +7,46 @@ const http = require("http");
 const { WebSocketServer } = require("ws");
 const fs = require("fs");
 
-// 🔑 ВСТАВ СВІЙ ТОКЕН СЮДИ (У ЛАПКАХ!)
-const ALERTS_TOKEN = "50384ea5708d0490af5054940304a4eda4413fbdab2203";
+// -------------------------------------------------------
+// 🔥 1) СТАБІЛЬНИЙ FETCH (000% не впаде на Render)
+// -------------------------------------------------------
+let fetch;
+try {
+  fetch = global.fetch; // якщо Node 18+ — вже є
+  if (!fetch) throw new Error("no fetch");
+} catch {
+  fetch = (...args) =>
+    import("node-fetch").then(({ default: f }) => f(...args));
+  console.log("⚠️ Using node-fetch fallback");
+}
+
+// -------------------------------------------------------
+// 🔑 2) ТВОЙ ТОКЕН
+// -------------------------------------------------------
+const ALERTS_TOKEN = "ВСТАВ_СЮДИ_СВІЙ_ТОКЕН";
 const ALERTS_URL =
   "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
 
-// ================================
-// 1. HTTP + WS server
-// ================================
+// -------------------------------------------------------
+// 3) HTTP + WS сервер
+// -------------------------------------------------------
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 const PORT = process.env.PORT || 3000;
 
-// роздаємо всі файли з поточної папки
-app.use(express.static(".")); 
+// 🔥 ВАЖЛИВО: віддаємо ВСІ твої файли
+app.use(express.static("."));
 
-// ================================
-// 2. Збереження цілей
-// ================================
+// -------------------------------------------------------
+// 4) ЗБЕРІГАННЯ ЦІЛЕЙ
+// -------------------------------------------------------
 const TARGETS_FILE = "./targets.json";
 let targets = [];
 
 try {
-  const raw = fs.readFileSync(TARGETS_FILE, "utf8");
-  targets = JSON.parse(raw);
+  targets = JSON.parse(fs.readFileSync(TARGETS_FILE, "utf8"));
 } catch {
   targets = [];
 }
@@ -44,25 +58,19 @@ function saveTargets() {
 function broadcast(obj) {
   const json = JSON.stringify(obj);
   wss.clients.forEach((ws) => {
-    if (ws.readyState === 1) {
-      ws.send(json);
-    }
+    if (ws.readyState === 1) ws.send(json);
   });
 }
 
-// ================================
-// 3. WS логіка (адмін + глядач)
-// ================================
+// -------------------------------------------------------
+// 5) WebSocket логіка
+// -------------------------------------------------------
+
 let lastAlerts = [];
 
 wss.on("connection", (ws) => {
-  // при підключенні віддаємо поточний стан цілей
   ws.send(JSON.stringify({ type: "state", targets }));
-
-  // і поточний стан тривог, якщо є
-  if (lastAlerts.length) {
-    ws.send(JSON.stringify({ type: "alerts", regions: lastAlerts }));
-  }
+  ws.send(JSON.stringify({ type: "alerts", regions: lastAlerts }));
 
   ws.on("message", (raw) => {
     let msg;
@@ -73,7 +81,7 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.role === "admin") {
-      if (msg.action === "add" && msg.target) {
+      if (msg.action === "add") {
         const t = {
           id: Date.now(),
           type: msg.target.type,
@@ -83,13 +91,14 @@ wss.on("connection", (ws) => {
           dy: msg.target.dy,
           speed: msg.target.speed,
         };
+
         targets.push(t);
         saveTargets();
         broadcast({ type: "state", targets });
       }
 
       if (msg.action === "remove") {
-        targets = targets.filter((t) => t.id !== msg.id);
+        targets = targets.filter((x) => x.id !== msg.id);
         saveTargets();
         broadcast({ type: "state", targets });
       }
@@ -103,9 +112,9 @@ wss.on("connection", (ws) => {
   });
 });
 
-// ================================
-// 4. Рух цілей
-// ================================
+// -------------------------------------------------------
+// 6) РУХ ЦІЛЕЙ
+// -------------------------------------------------------
 setInterval(() => {
   targets.forEach((t) => {
     if (t.type === "iskander") {
@@ -124,11 +133,13 @@ setInterval(() => {
   broadcast({ type: "state", targets });
 }, 1000);
 
-// ================================
-// 5. Тривоги alerts.in.ua
-// ================================
+// -------------------------------------------------------
+// 7) ОТРИМАННЯ ТРИВОГ
+// -------------------------------------------------------
 async function fetchAlerts() {
   try {
+    console.log("📡 Fetching alerts…");
+
     const response = await fetch(ALERTS_URL);
 
     if (!response.ok) {
@@ -139,41 +150,38 @@ async function fetchAlerts() {
     const json = await response.json();
 
     if (!json.alerts || !Array.isArray(json.alerts)) {
-      console.log("UNEXPECTED ALERTS FORMAT:", json);
+      console.log("❗ Unexpected alerts format:", json);
       return;
     }
 
     const active = json.alerts
       .filter((a) => a.alert_type === "air_raid")
-      .map((a) => {
-        if (a.location_raion) return a.location_raion.toLowerCase();
-        if (a.location_oblast) return a.location_oblast.toLowerCase();
-        return null;
-      })
-      .filter(Boolean);
+      .map((a) =>
+        a.location_raion
+          ? a.location_raion.toLowerCase()
+          : a.location_oblast.toLowerCase()
+      );
 
     lastAlerts = active;
 
-    broadcast({
-      type: "alerts",
-      regions: active,
-    });
+    broadcast({ type: "alerts", regions: active });
 
-    console.log("🔔 ACTIVE ALERT REGIONS:", active);
+    console.log("🔔 ACTIVE regions:", active);
   } catch (e) {
-    console.log("ALERT FETCH FAILED:", e);
+    console.log("❗ ALERT FETCH FAILED:", e);
   }
 }
 
-// кожні 15 секунд опитуємо API
 setInterval(fetchAlerts, 15000);
 fetchAlerts();
 
-// ================================
-// 6. Запуск сервера
-// ================================
+// -------------------------------------------------------
+// 8) СТАРТ
+// -------------------------------------------------------
 server.listen(PORT, () => {
-  console.log("🌐 SERVER RUNNING ON PORT", PORT);
+  console.log("🌐 SERVER STARTED ON PORT", PORT);
 });
+
+
 
 
