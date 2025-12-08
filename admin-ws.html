@@ -82,14 +82,17 @@ map.on("click", e => {
 // ПРАВИЛЬНІ вектори (як у тебе було)
 function dirToVector(d){
   switch(d){
-    case "N":  return {dx:+1, dy:0};
+    case "N":  return {dx:0,  dy:+1};
     case "NE": return {dx:+1, dy:+1};
-    case "E":  return {dx:0, dy:+1};
+    case "E":  return {dx:+1, dy:0};
     case "SE": return {dx:+1, dy:-1};
-    case "S":  return {dx:0, dy:-1};
+    case "S":  return {dx:0,  dy:-1};
     case "SW": return {dx:-1, dy:-1};
-    case "W":  return {dx:0, dy:-1};
+    case "W":  return {dx:-1, dy:0};
     case "NW": return {dx:-1, dy:+1};
+  }
+}
+
   }
 }
 
@@ -149,4 +152,5 @@ clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
 
 </body>
 </html>
+
 
