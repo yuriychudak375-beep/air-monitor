@@ -8,7 +8,7 @@ const { WebSocketServer } = require("ws");
 const fs = require("fs");
 
 // 👇 ВСТАВ СВІЙ ТОКЕН СЮДИ
-const ALERTS_TOKEN = 50384ea5708d0490af5054940304a4eda4413fbdab2203;
+const ALERTS_TOKEN = "50384ea5708d0490af5054940304a4eda4413fbdab2203";
 
 // =======================================
 //        1. СТАРТ СЕРВЕРУ
@@ -146,4 +146,5 @@ fetchAlerts();
 server.listen(PORT, () => {
     console.log("🌐 SERVER RUNNING ON PORT", PORT);
 });
+
 
