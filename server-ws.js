@@ -1,188 +1,139 @@
-// ================================
-//  AIR-MONITOR — сервер
-// ================================
+// ===============================
+//  БАЗОВИЙ СЕРВЕР + WEBSOCKET
+// ===============================
+import express from "express";
+import { WebSocketServer } from "ws";
+import fs from "fs";
+import fetch from "node-fetch";
 
-const express = require("express");
-const http = require("http");
-const { WebSocketServer } = require("ws");
-const fs = require("fs");
-
-// -------------------------------------------------------
-// 🔥 1) СТАБІЛЬНИЙ FETCH (000% не впаде на Render)
-// -------------------------------------------------------
-let fetch;
-try {
-  fetch = global.fetch; // якщо Node 18+ — вже є
-  if (!fetch) throw new Error("no fetch");
-} catch {
-  fetch = (...args) =>
-    import("node-fetch").then(({ default: f }) => f(...args));
-  console.log("⚠️ Using node-fetch fallback");
-}
-
-// -------------------------------------------------------
-// 🔑 2) ТВОЙ ТОКЕН
-// -------------------------------------------------------
-const ALERTS_TOKEN = "50384ea5708d0490af5054940304a4eda4413fbdab2203";
-const ALERTS_URL =
-  "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
-
-// -------------------------------------------------------
-// 3) HTTP + WS сервер
-// -------------------------------------------------------
 const app = express();
-const server = http.createServer(app);
+const PORT = process.env.PORT || 10000;
+
+// Папка зі статикою
+app.use(express.static("./"));
+
+// === РОЗДАЄМО ГЛЯДАЦЬКУ СТОРІНКУ ===
+app.get("/", (req, res) => {
+  res.sendFile(process.cwd() + "/index.html");
+});
+
+// === РОЗДАЄМО СТОРІНКУ ЛОГІНУ АДМІНА ===
+app.get("/admin", (req, res) => {
+  res.sendFile(process.cwd() + "/admin-login.html");
+});
+
+// === СТОРІНКА АДМІНКИ (ПІСЛЯ ВВОДУ ПАРОЛЯ) ===
+app.get("/admin-panel", (req, res) => {
+  res.sendFile(process.cwd() + "/admin.html");
+});
+
+// Запускаємо HTTP сервер
+const server = app.listen(PORT, () => {
+  console.log("SERVER STARTED ON PORT", PORT);
+});
+
+// ===============================
+//  ЗАПУСКАЄМО WEBSOCKET
+// ===============================
 const wss = new WebSocketServer({ server });
 
-const PORT = process.env.PORT || 3000;
-
-// 🔥 ВАЖЛИВО: віддаємо ВСІ твої файли
-app.use(express.static("."));
-
-// -------------------------------------------------------
-// 4) ЗБЕРІГАННЯ ЦІЛЕЙ
-// -------------------------------------------------------
-const TARGETS_FILE = "./targets.json";
+// ПАМʼЯТЬ ПО ЦІЛЯХ
 let targets = [];
 
-try {
-  targets = JSON.parse(fs.readFileSync(TARGETS_FILE, "utf8"));
-} catch {
-  targets = [];
-}
-
-function saveTargets() {
-  fs.writeFile(TARGETS_FILE, JSON.stringify(targets, null, 2), () => {});
-}
-
-function broadcast(obj) {
-  const json = JSON.stringify(obj);
-  wss.clients.forEach((ws) => {
-    if (ws.readyState === 1) ws.send(json);
+// Ширимо стан клієнтам
+function broadcast(data) {
+  const str = JSON.stringify(data);
+  wss.clients.forEach(c => {
+    if (c.readyState === 1) c.send(str);
   });
 }
 
-// -------------------------------------------------------
-// 5) WebSocket логіка
-// -------------------------------------------------------
+// ===============================
+//  ОБРОБКА ПОВІДОМЛЕНЬ WS
+// ===============================
+wss.on("connection", ws => {
+  console.log("Client connected");
 
-let lastAlerts = [];
-
-wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "state", targets }));
-  ws.send(JSON.stringify({ type: "alerts", regions: lastAlerts }));
 
-  ws.on("message", (raw) => {
-    let msg;
-    try {
-      msg = JSON.parse(raw);
-    } catch {
+  ws.on("message", msg => {
+    let data;
+    try { data = JSON.parse(msg); } catch {
       return;
     }
 
-    if (msg.role === "admin") {
-      if (msg.action === "add") {
-        const t = {
-          id: Date.now(),
-          type: msg.target.type,
-          lat: msg.target.lat,
-          lon: msg.target.lon,
-          dx: msg.target.dx,
-          dy: msg.target.dy,
-          speed: msg.target.speed,
-        };
-
+    // АДМІНСЬКІ КОМАНДИ
+    if (data.role === "admin") {
+      if (data.action === "add") {
+        const t = data.target;
+        t.id = Date.now().toString();
         targets.push(t);
-        saveTargets();
-        broadcast({ type: "state", targets });
       }
 
-      if (msg.action === "remove") {
-        targets = targets.filter((x) => x.id !== msg.id);
-        saveTargets();
-        broadcast({ type: "state", targets });
+      if (data.action === "remove") {
+        targets = targets.filter(x => x.id !== data.id);
       }
 
-      if (msg.action === "clear") {
+      if (data.action === "clear") {
         targets = [];
-        saveTargets();
-        broadcast({ type: "state", targets });
       }
+
+      broadcast({ type: "state", targets });
     }
   });
 });
 
-// -------------------------------------------------------
-// 6) РУХ ЦІЛЕЙ
-// -------------------------------------------------------
+// ===============================
+//  РУХ ЦІЛЕЙ
+// ===============================
 setInterval(() => {
-  targets.forEach((t) => {
-    if (t.type === "iskander") {
-      t.lat += t.dx * (t.speed / 5);
-      t.lon += t.dy * (t.speed / 5);
-      t.dy += 0.001;
-    } else if (t.type === "x101") {
-      t.lat += t.dx * (t.speed / 10);
-      t.lon += t.dy * (t.speed / 10);
-    } else if (t.type === "shahed" || t.type === "kalibr") {
-      t.lat += t.dx * 0.15;
-      t.lon += t.dy * 0.15;
-    }
+  targets.forEach(t => {
+    t.lat += t.dx * t.speed;
+    t.lon += t.dy * t.speed;
   });
 
   broadcast({ type: "state", targets });
-}, 1000);
+}, 300);
 
-// -------------------------------------------------------
-// 7) ОТРИМАННЯ ТРИВОГ
-// -------------------------------------------------------
-async function fetchAlerts() {
+// ===============================
+//  API ПОВІТРЯНИХ ТРИВОГ
+// ===============================
+const ALERTS_URL =
+  "https://api.alerts.in.ua/v1/alerts/active.json?token=" +
+  process.env.ALERTS_TOKEN;
+
+console.log("ALERT URL:", ALERTS_URL);
+
+// поточний стан тривог
+let alertAreas = [];
+
+// КОЖНІ 20 СЕКУНД ОНОВЛЕННЯ
+setInterval(async () => {
   try {
-    console.log("📡 Fetching alerts…");
+    const res = await fetch(ALERTS_URL);
 
-    const response = await fetch(ALERTS_URL);
-
-    if (!response.ok) {
-      console.log("🛑 ALERT API ERROR:", response.status);
+    if (!res.ok) {
+      console.log("ALERT API ERROR:", res.status);
       return;
     }
 
-    const json = await response.json();
+    const data = await res.json();
 
-    if (!json.alerts || !Array.isArray(json.alerts)) {
-      console.log("❗ Unexpected alerts format:", json);
+    // API повертає { alerts: [...] }
+    if (!data.alerts || !Array.isArray(data.alerts)) {
+      console.log("ALERT FORMAT ERROR:", data);
       return;
     }
 
-    const active = json.alerts
-      .filter((a) => a.alert_type === "air_raid")
-      .map((a) =>
-        a.location_raion
-          ? a.location_raion.toLowerCase()
-          : a.location_oblast.toLowerCase()
-      );
+    alertAreas = data.alerts;
+    broadcast({ type: "alerts", alertAreas });
 
-    lastAlerts = active;
-
-    broadcast({ type: "alerts", regions: active });
-
-    console.log("🔔 ACTIVE regions:", active);
-  } catch (e) {
-    console.log("❗ ALERT FETCH FAILED:", e);
+  } catch (err) {
+    console.log("ALERT FETCH FAILED:", err);
   }
-}
+}, 20000);
 
-setInterval(fetchAlerts, 15000);
-fetchAlerts();
-
-// -------------------------------------------------------
-// 8) СТАРТ
-// -------------------------------------------------------
-server.listen(PORT, () => {
-  console.log("🌐 SERVER STARTED ON PORT", PORT);
+// клієнт отримує актуальні тривоги
+wss.on("connection", ws => {
+  ws.send(JSON.stringify({ type: "alerts", alertAreas }));
 });
-
-
-
-
-
