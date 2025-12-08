@@ -1,139 +1,65 @@
-// ===============================
-//  БАЗОВИЙ СЕРВЕР + WEBSOCKET
-// ===============================
-import express from "express";
-import { WebSocketServer } from "ws";
-import fs from "fs";
-import fetch from "node-fetch";
+const express = require("express");
+const WebSocket = require("ws");
+const http = require("http");
 
-const app = express();
-const PORT = process.env.PORT || 10000;
+const ALERTS_TOKEN = process.env.ALERTS_TOKEN;
 
-// Папка зі статикою
-app.use(express.static("./"));
-
-// === РОЗДАЄМО ГЛЯДАЦЬКУ СТОРІНКУ ===
-app.get("/", (req, res) => {
-  res.sendFile(process.cwd() + "/index.html");
-});
-
-// === РОЗДАЄМО СТОРІНКУ ЛОГІНУ АДМІНА ===
-app.get("/admin", (req, res) => {
-  res.sendFile(process.cwd() + "/admin-login.html");
-});
-
-// === СТОРІНКА АДМІНКИ (ПІСЛЯ ВВОДУ ПАРОЛЯ) ===
-app.get("/admin-panel", (req, res) => {
-  res.sendFile(process.cwd() + "/admin.html");
-});
-
-// Запускаємо HTTP сервер
-const server = app.listen(PORT, () => {
-  console.log("SERVER STARTED ON PORT", PORT);
-});
-
-// ===============================
-//  ЗАПУСКАЄМО WEBSOCKET
-// ===============================
-const wss = new WebSocketServer({ server });
-
-// ПАМʼЯТЬ ПО ЦІЛЯХ
-let targets = [];
-
-// Ширимо стан клієнтам
-function broadcast(data) {
-  const str = JSON.stringify(data);
-  wss.clients.forEach(c => {
-    if (c.readyState === 1) c.send(str);
-  });
+if (!ALERTS_TOKEN) {
+  console.error("❌ ERROR: ALERTS_TOKEN is missing. Add it in Render → Environment.");
 }
 
-// ===============================
-//  ОБРОБКА ПОВІДОМЛЕНЬ WS
-// ===============================
-wss.on("connection", ws => {
-  console.log("Client connected");
+const app = express();
+app.use(express.static(".")); // serve HTML files normally
 
-  ws.send(JSON.stringify({ type: "state", targets }));
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-  ws.on("message", msg => {
-    let data;
-    try { data = JSON.parse(msg); } catch {
-      return;
-    }
+// === Fetch function using BUILT-IN fetch ===
+async function fetchAlerts() {
+  const url = `https://api.alerts.in.ua/v1/alerts/active.json?token=${ALERTS_TOKEN}`;
+  console.log("ALERT URL:", url);
 
-    // АДМІНСЬКІ КОМАНДИ
-    if (data.role === "admin") {
-      if (data.action === "add") {
-        const t = data.target;
-        t.id = Date.now().toString();
-        targets.push(t);
-      }
-
-      if (data.action === "remove") {
-        targets = targets.filter(x => x.id !== data.id);
-      }
-
-      if (data.action === "clear") {
-        targets = [];
-      }
-
-      broadcast({ type: "state", targets });
-    }
-  });
-});
-
-// ===============================
-//  РУХ ЦІЛЕЙ
-// ===============================
-setInterval(() => {
-  targets.forEach(t => {
-    t.lat += t.dx * t.speed;
-    t.lon += t.dy * t.speed;
-  });
-
-  broadcast({ type: "state", targets });
-}, 300);
-
-// ===============================
-//  API ПОВІТРЯНИХ ТРИВОГ
-// ===============================
-const ALERTS_URL =
-  "https://api.alerts.in.ua/v1/alerts/active.json?token=" +
-  process.env.ALERTS_TOKEN;
-
-console.log("ALERT URL:", ALERTS_URL);
-
-// поточний стан тривог
-let alertAreas = [];
-
-// КОЖНІ 20 СЕКУНД ОНОВЛЕННЯ
-setInterval(async () => {
   try {
-    const res = await fetch(ALERTS_URL);
+    const res = await fetch(url);
 
     if (!res.ok) {
-      console.log("ALERT API ERROR:", res.status);
-      return;
+      console.error("❌ ALERT API ERROR:", res.status);
+      return [];
     }
 
     const data = await res.json();
 
     // API повертає { alerts: [...] }
-    if (!data.alerts || !Array.isArray(data.alerts)) {
-      console.log("ALERT FORMAT ERROR:", data);
-      return;
-    }
-
-    alertAreas = data.alerts;
-    broadcast({ type: "alerts", alertAreas });
+    return data.alerts || [];
 
   } catch (err) {
-    console.log("ALERT FETCH FAILED:", err);
+    console.error("❌ ALERT FETCH FAILED:", err);
+    return [];
   }
-}, 20000);
+}
 
-// клієнт отримує актуальні тривоги
-wss.on("connection", ws => {
-  ws.send(JSON.stringify({ type: "alerts", alertAreas }));
+// === Broadcast alerts to all clients ===
+async function broadcastAlerts() {
+  const alerts = await fetchAlerts();
+
+  const msg = JSON.stringify({
+    type: "alert_update",
+    alerts: alerts,
+  });
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) client.send(msg);
+  });
+}
+
+// Run every 10 seconds
+setInterval(broadcastAlerts, 10000);
+
+// Required WebSocket handler
+wss.on("connection", (ws) => {
+  console.log("Client connected");
 });
+
+// Start server
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log("Server running on port", PORT));
