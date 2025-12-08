@@ -23,7 +23,7 @@ try {
 // -------------------------------------------------------
 // 🔑 2) ТВОЙ ТОКЕН
 // -------------------------------------------------------
-const ALERTS_TOKEN = "ВСТАВ_СЮДИ_СВІЙ_ТОКЕН";
+const ALERTS_TOKEN = "50384ea5708d0490af5054940304a4eda4413fbdab2203";
 const ALERTS_URL =
   "https://api.alerts.in.ua/v1/alerts/active.json?token=" + ALERTS_TOKEN;
 
@@ -181,6 +181,7 @@ fetchAlerts();
 server.listen(PORT, () => {
   console.log("🌐 SERVER STARTED ON PORT", PORT);
 });
+
 
 
 
