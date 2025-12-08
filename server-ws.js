@@ -1,107 +1,101 @@
-require("dotenv").config();
 const express = require("express");
+const http = require("http");
 const WebSocket = require("ws");
 const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-
-const ALERTS_TOKEN = process.env.ALERTS_TOKEN;
-
-// --- СТАТИКА ---
-app.use(express.static(__dirname)); // дає адмінку і глядацьку
-
-// --- СЕРВЕР ---
-const server = app.listen(PORT, () => {
-    console.log("SERVER STARTED on port", PORT);
-});
-
-// --- WS ---
+const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+const ADMIN_PASSWORD = "12345"; // Можеш змінити тут
+
+// ======= MIDDLEWARE =======
+app.use(express.json());
+
+// ======= ROUTES =======
+
+// Глядацька
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index-ws.html"));
+});
+
+// Сторінка з паролем (ти її вже зробив — admin-login.html)
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-login.html"));
+});
+
+// Обробка логіну з admin-login.html
+app.post("/admin-login", (req, res) => {
+  const pass = (req.body && req.body.password) || "";
+  if (pass === ADMIN_PASSWORD) {
+    return res.json({ ok: true });
+  }
+  res.json({ ok: false });
+});
+
+// Реальна адмін-панель
+app.get("/admin-real", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-ws.html"));
+});
+
+// Статика — моделі, скрипти, все інше
+app.use(express.static(__dirname));
+
+// ======= TARGET DATA =======
 let targets = [];
-let activeAlerts = [];
 
-// Відправка даних всім клієнтам
-function broadcast(data) {
-    const msg = JSON.stringify(data);
-    wss.clients.forEach(c => {
-        if (c.readyState === WebSocket.OPEN) c.send(msg);
-    });
+function broadcast(obj) {
+  const msg = JSON.stringify(obj);
+  wss.clients.forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  });
 }
 
-// --- API Alerts.in.ua ---
-async function fetchAlerts() {
+// ======= WEBSOCKET =========
+wss.on("connection", (ws) => {
+  console.log("WS client connected");
+
+  // відправити поточний стан
+  ws.send(JSON.stringify({ type: "state", targets }));
+
+  ws.on("message", (msg) => {
+    let data;
     try {
-        if (!ALERTS_TOKEN) {
-            console.log("❌ ALERTS_TOKEN не знайдено!");
-            return;
-        }
-
-        const url = `https://api.alerts.in.ua/v1/alerts/active.json?token=${ALERTS_TOKEN}`;
-
-        const res = await fetch(url);
-        if (!res.ok) {
-            console.log("❌ ALERT API ERROR:", res.status);
-            return;
-        }
-
-        const data = await res.json();
-
-        if (!Array.isArray(data.alerts)) {
-            console.log("❌ API повернуло неправильний формат:", data);
-            return;
-        }
-
-        activeAlerts = data.alerts;
-
-        console.log("🟢 Активні тривоги:", activeAlerts.length);
-
-        broadcast({
-            type: "alerts",
-            alerts: activeAlerts
-        });
-
-    } catch (err) {
-        console.log("❌ ALERT FETCH FAILED:", err);
+      data = JSON.parse(msg);
+    } catch {
+      return;
     }
-}
 
-// кожні 10с оновлення тривог
-setInterval(fetchAlerts, 10000);
-fetchAlerts();
+    // Admin actions
+    if (data.role === "admin") {
+      if (data.action === "add") {
+        const id = Date.now() + "_" + Math.random();
+        const t = { id, ...data.target };
+        targets.push(t);
+      } else if (data.action === "remove") {
+        targets = targets.filter((t) => t.id !== data.id);
+      } else if (data.action === "clear") {
+        targets = [];
+      }
 
-// WS прийом команд адмінки
-wss.on("connection", ws => {
-    console.log("Client connected");
+      broadcast({ type: "state", targets });
+    }
+  });
+});
 
-    ws.send(JSON.stringify({
-        type: "init",
-        targets,
-        alerts: activeAlerts
-    }));
+// ======= TARGET MOVEMENT =======
+// ЛОГІКА ЯК У ТВОЄМУ СТАРОМУ ФАЙЛІ (НІЧОГО НЕ МІНЯЮ)
+setInterval(() => {
+  targets.forEach((t) => {
+    t.lat += t.dx * t.speed;
+    t.lon += t.dy * t.speed;
+  });
 
-    ws.on("message", msg => {
-        try {
-            const data = JSON.parse(msg);
+  broadcast({ type: "state", targets });
+}, 1000);
 
-            if (data.type === "addTarget") {
-                targets.push(data.target);
-                broadcast({ type: "targets", targets });
-            }
-
-            if (data.type === "clearTargets") {
-                targets = [];
-                broadcast({ type: "targets", targets });
-            }
-
-            if (data.type === "deleteOne") {
-                targets = targets.filter(t => t.id !== data.id);
-                broadcast({ type: "targets", targets });
-            }
-
-        } catch (e) {
-            console.log("WS error:", e);
-        }
-    });
+// ======= START SERVER =======
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
