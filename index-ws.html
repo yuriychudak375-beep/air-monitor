@@ -1,183 +1,220 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
-  <meta charset="utf-8">
-  <title>Monitor</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <meta charset="UTF-8" />
+  <title>Air Monitor — Viewer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
   <style>
-    body{
-      margin:0;
-      background:#111;
-      overflow:hidden;
-      font-family:sans-serif;
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    #map{
-      position:absolute;
-      top:0;left:0;
-      width:100vw;
-      height:100vh;
-      z-index:1;
+    body.dark { background: #050608; color: #eee; }
+    body.light { background: #f2f2f2; color: #111; }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
     }
-    #hud{
-      position:absolute;
-      top:10px;
-      left:10px;
-      z-index:2;
-      display:flex;
-      gap:10px;
-      align-items:center;
+
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      backdrop-filter: blur(6px);
     }
-    #datetime{
-      padding:6px 10px;
-      background:rgba(0,0,0,0.6);
-      color:#fff;
-      border-radius:4px;
-      font-size:13px;
+    body.light #hud {
+      background: rgba(255,255,255,0.8);
+      color: #111;
     }
-    #themeToggle{
-      padding:6px 10px;
-      background:rgba(0,0,0,0.6);
-      color:#fff;
-      border-radius:4px;
-      border:1px solid #555;
-      cursor:pointer;
-      font-size:13px;
+    #clock {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    #themeToggle {
+      border: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      background: #2d6cff;
+      color: #fff;
+    }
+    body.light #themeToggle {
+      background: #222;
+      color: #fff;
     }
   </style>
 </head>
-<body>
+<body class="dark">
+  <div id="map"></div>
 
-<div id="map"></div>
+  <div id="hud">
+    <div id="clock">--:--:--</div>
+    <button id="themeToggle">Світла тема</button>
+  </div>
 
-<div id="hud">
-  <div id="datetime"></div>
-  <button id="themeToggle">Світла тема</button>
-</div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // ===== КАРТА =====
+    const map = L.map("map").setView([49, 31], 6);
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
-// ===== КАРТА =====
-const map = L.map("map").setView([49,31],6);
+    const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 10,
+      minZoom: 4,
+      attribution: "&copy; OpenStreetMap"
+    });
 
-const lightLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom:19,
-  attribution:"&copy; OpenStreetMap"
-});
+    const tilesDark = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 10,
+        minZoom: 4,
+        subdomains: "abcd",
+        attribution: "&copy; OpenStreetMap, &copy; CartoDB"
+      }
+    );
 
-const darkLayer = L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  {
-    maxZoom:19,
-    attribution:"&copy; CartoDB & OpenStreetMap"
-  }
-);
+    let isDark = true;
+    tilesDark.addTo(map);
 
-// стартуємо з темної
-let currentBase = darkLayer;
-darkLayer.addTo(map);
+    const clockEl = document.getElementById("clock");
+    function updateClock() {
+      const now = new Date();
+      clockEl.textContent = now.toLocaleString("uk-UA", {
+        timeZone: "Europe/Kyiv",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
 
-const themeBtn = document.getElementById("themeToggle");
-themeBtn.onclick = () => {
-  if (currentBase === darkLayer) {
-    map.removeLayer(darkLayer);
-    lightLayer.addTo(map);
-    currentBase = lightLayer;
-    themeBtn.textContent = "Темна тема";
-  } else {
-    map.removeLayer(lightLayer);
-    darkLayer.addTo(map);
-    currentBase = darkLayer;
-    themeBtn.textContent = "Світла тема";
-  }
-};
+    const themeBtn = document.getElementById("themeToggle");
+    themeBtn.onclick = () => {
+      if (isDark) {
+        map.removeLayer(tilesDark);
+        tilesLight.addTo(map);
+        isDark = false;
+        document.body.classList.remove("dark");
+        document.body.classList.add("light");
+        themeBtn.textContent = "Темна тема";
+      } else {
+        map.removeLayer(tilesLight);
+        tilesDark.addTo(map);
+        isDark = true;
+        document.body.classList.remove("light");
+        document.body.classList.add("dark");
+        themeBtn.textContent = "Світла тема";
+      }
+    };
 
-// ===== ДАТА/ЧАС =====
-const dtDiv = document.getElementById("datetime");
-function updateTime(){
-  const now = new Date();
-  const date = now.toLocaleDateString("uk-UA");
-  const time = now.toLocaleTimeString("uk-UA", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
-  dtDiv.textContent = date + " " + time;
-}
-setInterval(updateTime,1000);
-updateTime();
+    // ===== МОДЕЛЬКИ =====
+    const MODEL_PNG = {
+      x101: "models/x101.png",
+      shahed: "models/shahed.png",
+      iskander: "models/iskander.png",
+      kalibr: "models/kalibr.png"
+    };
 
-// ===== РАКЕТИ / ДРОНИ =====
-const ICONS = {
-  x101: "models/x101.png",
-  shahed: "models/shahed.png",
-  iskander: "models/iskander.png",
-  kalibr: "models/kalibr.png"
-};
+    // Якщо якась моделька трошки криво, підкрутиш тут
+    const ROT_OFFSET = {
+      x101: 0,
+      shahed: 0,
+      iskander: 0,
+      kalibr: 0
+    };
 
-// індивідуальні офсети, як у тебе було
-const OFFSET = {
-  x101: -45,
-  shahed: 0,
-  iskander: 0,
-  kalibr: 0
-};
+    function createMarker(t) {
+      const div = document.createElement("div");
+      div.style.width = "60px";
+      div.style.height = "60px";
+      div.style.display = "flex";
+      div.style.alignItems = "center";
+      div.style.justifyContent = "center";
 
-function createMarker(lat, lon, url){
-  const div = document.createElement("div");
-  div.style.width="60px";
-  div.style.height="60px";
+      const img = document.createElement("img");
+      img.src = MODEL_PNG[t.type] || MODEL_PNG["x101"];
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      img.style.transformOrigin = "center";
+      img.style.transition = "transform 0.15s linear";
 
-  const img=document.createElement("img");
-  img.src=url;
-  img.style.width="100%";
-  img.style.height="100%";
-  img.style.transformOrigin="center";
+      div.appendChild(img);
 
-  div.appendChild(img);
+      const icon = L.divIcon({
+        className: "",
+        html: div,
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
+      });
 
-  const icon=L.divIcon({className:"",html:div,iconSize:[60,60],iconAnchor:[30,30]});
-
-  const m=L.marker([lat,lon],{icon});
-  m._img = img;
-  return m;
-}
-
-const markers = new Map();
-
-function update(list){
-  const exist=new Set();
-
-  for(const t of list){
-    exist.add(t.id);
-
-    let m = markers.get(t.id);
-    if (!m){
-      m = createMarker(t.lat,t.lon,ICONS[t.type]);
-      m.addTo(map);
-      markers.set(t.id,m);
-    } else {
-      m.setLatLng([t.lat,t.lon]);
+      const marker = L.marker([t.lat, t.lon], { icon });
+      marker._imgRef = img;
+      return marker;
     }
 
-    // t.dx, t.dy — ті самі, що й на сервері
-    let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
-    angle = 90 - angle + (OFFSET[t.type] || 0);
+    const markers = new Map();
 
-    marker._img.style.transform = `rotate(${angle}deg)`;
-    marker._img.style.transformOrigin = "center";
-  }
+    function applyState(list) {
+      const alive = new Set();
 
-  markers.forEach((m,id)=>{
-    if (!exist.has(id)){
-      map.removeLayer(m);
-      markers.delete(id);
+      list.forEach(t => {
+        alive.add(t.id);
+
+        let marker = markers.get(t.id);
+        if (!marker) {
+          marker = createMarker(t);
+          marker.addTo(map);
+          markers.set(t.id, marker);
+        } else {
+          marker.setLatLng([t.lat, t.lon]);
+        }
+
+        // ОБЕРТАННЯ: dx/dy → кут, як домовлялись
+        let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
+        // 0° = вгору, а не вправо → 90 - angle
+        angle = 90 - angle + (ROT_OFFSET[t.type] || 0);
+
+        marker._imgRef.style.transform = `rotate(${angle}deg)`;
+      });
+
+      markers.forEach((m, id) => {
+        if (!alive.has(id)) {
+          map.removeLayer(m);
+          markers.delete(id);
+        }
+      });
     }
-  });
-}
 
-const ws = new WebSocket(`wss://${location.host}`);
-ws.onmessage = e =>{
-  const d = JSON.parse(e.data);
-  if (d.type==="state") update(d.targets || []);
-};
-</script>
+    const ws = new WebSocket(
+      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+    );
 
+    ws.onopen = () => console.log("WS viewer connected");
+    ws.onmessage = ev => {
+      let data;
+      try { data = JSON.parse(ev.data); } catch { return; }
+      if (data.type === "state" && Array.isArray(data.targets)) {
+        applyState(data.targets);
+      }
+    };
+  </script>
 </body>
 </html>
-
