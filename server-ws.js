@@ -8,7 +8,7 @@ const { WebSocketServer } = require("ws");
 const fs = require("fs");
 
 // 👇 просто константа, без process.env
-const ALERTS_TOKEN = "50384ea5788d0490af50549480304a4eda4413fbdab2203";
+const ALERTS_TOKEN = "50384ea5708d0490af5054940304a4eda4413fbdab2203";
 
 
 // =======================================
@@ -143,6 +143,7 @@ fetchAlerts();
 server.listen(PORT, () => {
     console.log("🌐 SERVER RUNNING ON PORT", PORT);
 });
+
 
 
 
