@@ -7,7 +7,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const ADMIN_PASSWORD = "12345"; // Можеш змінити тут
+const ADMIN_PASSWORD = "42Adminpassfrommapofdrones42"; // Можеш змінити тут
 
 // ======= MIDDLEWARE =======
 app.use(express.json());
@@ -99,3 +99,4 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
