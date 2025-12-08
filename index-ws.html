@@ -155,11 +155,12 @@ function update(list){
       m.setLatLng([t.lat,t.lon]);
     }
 
-    // твоя "правильна математика"
+    // t.dx, t.dy — ті самі, що й на сервері
     let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
     angle = 90 - angle + (OFFSET[t.type] || 0);
 
-    m._img.style.transform = `rotate(${angle}deg)`;
+    marker._img.style.transform = `rotate(${angle}deg)`;
+    marker._img.style.transformOrigin = "center";
   }
 
   markers.forEach((m,id)=>{
@@ -179,3 +180,4 @@ ws.onmessage = e =>{
 
 </body>
 </html>
+
