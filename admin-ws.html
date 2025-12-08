@@ -1,111 +1,237 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
-<meta charset="utf-8">
-<title>Admin Panel</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-<style>
-body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
-#wrap{display:flex;height:100vh;}
-#map{width:70vw;}
-#panel{width:30vw;padding:10px;background:#181818;}
-input,select,button{width:100%;padding:6px;margin:6px 0;background:#222;color:#eee;border:1px solid #555;}
-</style>
+  <meta charset="UTF-8">
+  <title>Адмін — Air Monitor</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #eee;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #wrap {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+    #map {
+      width: 70vw;
+      height: 100vh;
+    }
+    #panel {
+      width: 30vw;
+      height: 100vh;
+      box-sizing: border-box;
+      padding: 10px;
+      background: #181818;
+      border-left: 1px solid #333;
+      overflow-y: auto;
+    }
+    h2, h3 {
+      margin-top: 0;
+    }
+    label {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px;
+      margin: 4px 0 10px;
+      background: #222;
+      border: 1px solid #555;
+      color: #eee;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    button {
+      cursor: pointer;
+      background: #2d6cff;
+      border-color: #2d6cff;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: #333;
+      border-color: #555;
+    }
+    button:hover {
+      filter: brightness(1.1);
+    }
+    .target-item {
+      border: 1px solid #333;
+      padding: 6px;
+      margin-bottom: 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .target-item button {
+      width: auto;
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-top: 4px;
+      background: #aa3333;
+      border-color: #aa3333;
+    }
+  </style>
 </head>
 <body>
 
 <div id="wrap">
-    <div id="map"></div>
+  <div id="map"></div>
 
-    <div id="panel">
-        <h2>Додати ціль</h2>
+  <div id="panel">
+    <h2>Додати ціль</h2>
 
-        <label>Тип</label>
-        <select id="type">
-            <option value="x101">X-101</option>
-            <option value="shahed">Shahed</option>
-            <option value="iskander">Iskander</option>
-            <option value="kalibr">Kalibr</option>
-        </select>
+    <label for="type">Тип</label>
+    <select id="type">
+      <option value="x101">X-101</option>
+      <option value="shahed">Shahed</option>
+      <option value="iskander">Iskander</option>
+      <option value="kalibr">Kalibr</option>
+    </select>
 
-        <label>Lat</label><input id="lat">
-        <label>Lon</label><input id="lon">
+    <label>Lat / Lon (клік по карті)</label>
+    <input id="lat" type="number" step="0.0001" placeholder="Lat">
+    <input id="lon" type="number" step="0.0001" placeholder="Lon">
 
-        <label>Напрямок</label>
-        <select id="dir">
-            <option value="N">Північ</option>
-            <option value="NE">Пн-Сх</option>
-            <option value="E">Схід</option>
-            <option value="SE">Пд-Сх</option>
-            <option value="S">Південь</option>
-            <option value="SW">Пд-Зх</option>
-            <option value="W">Захід</option>
-            <option value="NW">Пн-Зх</option>
-        </select>
+    <label for="dir">Напрямок</label>
+    <select id="dir">
+      <option value="N">Північ</option>
+      <option value="NE">Пн-Сх</option>
+      <option value="E">Схід</option>
+      <option value="SE">Пд-Сх</option>
+      <option value="S">Південь</option>
+      <option value="SW">Пд-Зх</option>
+      <option value="W">Захід</option>
+      <option value="NW">Пн-Зх</option>
+    </select>
 
-        <label>Швидкість</label>
-        <input id="speed" value="0.03">
+    <label for="speed">Швидкість</label>
+    <input id="speed" type="number" step="0.01" value="0.03">
 
-        <button id="add">Додати</button>
-        <button id="clear">Очистити все</button>
+    <button id="addBtn">Додати</button>
+    <button id="clearBtn" class="secondary">Очистити всі</button>
 
-        <h3>Список</h3>
-        <div id="list"></div>
-    </div>
+    <h3>Поточні цілі</h3>
+    <div id="list"></div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-const map = L.map("map").setView([49,31],6);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+  // ===== КАРТА =====
+  const map = L.map("map").setView([49, 31], 6);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 10,
+    minZoom: 4,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(map);
 
-map.on("click", e => {
-    lat.value = e.latlng.lat.toFixed(5);
-    lon.value = e.latlng.lng.toFixed(5);
-});
+  const latInput = document.getElementById("lat");
+  const lonInput = document.getElementById("lon");
 
-// ПРАВИЛЬНІ вектори
-function dirToVector(d){
-    switch(d){
-        case "N":  return {dx:0, dy:+1};
-        case "NE": return {dx:+1, dy:+1};
-        case "E":  return {dx:+1, dy:0};
-        case "SE": return {dx:+1, dy:-1};
-        case "S":  return {dx:0, dy:-1};
-        case "SW": return {dx:-1, dy:-1};
-        case "W":  return {dx:-1, dy:0};
-        case "NW": return {dx:-1, dy:+1};
+  map.on("click", e => {
+    latInput.value = e.latlng.lat.toFixed(4);
+    lonInput.value = e.latlng.lng.toFixed(4);
+  });
+
+  // ===== НАПРЯМКИ (ФІКСОВІ) =====
+  function dirToVector(d) {
+    switch (d) {
+      case "N":  return { dx:  0, dy: +1 };
+      case "NE": return { dx: +1, dy: +1 };
+      case "E":  return { dx: +1, dy:  0 };
+      case "SE": return { dx: +1, dy: -1 };
+      case "S":  return { dx:  0, dy: -1 };
+      case "SW": return { dx: -1, dy: -1 };
+      case "W":  return { dx: -1, dy:  0 };
+      case "NW": return { dx: -1, dy: +1 };
     }
-}
+  }
 
-const ws = new WebSocket(`wss://${location.host}`);
-let targets = [];
+  // ===== WS =====
+  const ws = new WebSocket(
+    (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+  );
 
-ws.onmessage = e => {
-    const d = JSON.parse(e.data);
-    if (d.type==="state") {
-        targets = d.targets;
-        list.innerHTML = targets.map(t=>`ID ${t.id} — ${t.type}`).join("<br>");
+  let currentTargets = [];
+  const listEl = document.getElementById("list");
+
+  ws.onopen = () => console.log("WS admin connected");
+
+  ws.onmessage = ev => {
+    let data;
+    try { data = JSON.parse(ev.data); } catch { return; }
+
+    if (data.type === "state") {
+      currentTargets = data.targets || [];
+      renderList();
     }
-};
+  };
 
-add.onclick = ()=>{
-    const v = dirToVector(dir.value);
-    ws.send(JSON.stringify({
-        role:"admin",
-        action:"add",
-        target:{
-            type:type.value,
-            lat:+lat.value,
-            lon:+lon.value,
-            dx:v.dx,
-            dy:v.dy,
-            speed:+speed.value
-        }
-    }));
-};
+  function send(obj) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(obj));
+    }
+  }
 
-clear.onclick = ()=> ws.send(JSON.stringify({role:"admin",action:"clear"}));
+  // ===== СПИСОК =====
+  function renderList() {
+    listEl.innerHTML = "";
+    if (!currentTargets.length) {
+      listEl.textContent = "Немає активних цілей.";
+      return;
+    }
+
+    currentTargets.forEach(t => {
+      const div = document.createElement("div");
+      div.className = "target-item";
+      div.innerHTML = `
+        <div><b>${t.type}</b></div>
+        <div>ID: ${t.id}</div>
+        <div>Lat: ${t.lat.toFixed(3)}, Lon: ${t.lon.toFixed(3)}</div>
+        <div>dx: ${t.dx}, dy: ${t.dy}, v: ${t.speed}</div>
+      `;
+      const btn = document.createElement("button");
+      btn.textContent = "Видалити";
+      btn.onclick = () => {
+        send({ role: "admin", action: "remove", id: t.id });
+      };
+      div.appendChild(btn);
+      listEl.appendChild(div);
+    });
+  }
+
+  // ===== КНОПКИ =====
+  document.getElementById("addBtn").onclick = () => {
+    const lat = parseFloat(latInput.value);
+    const lon = parseFloat(lonInput.value);
+    if (Number.isNaN(lat) || Number.isNaN(lon)) {
+      alert("Клікни по карті або введи координати.");
+      return;
+    }
+
+    const type  = document.getElementById("type").value;
+    const dir   = document.getElementById("dir").value;
+    const speed = parseFloat(document.getElementById("speed").value) || 0.03;
+    const { dx, dy } = dirToVector(dir);
+
+    send({
+      role: "admin",
+      action: "add",
+      target: { type, lat, lon, dx, dy, speed }
+    });
+  };
+
+  document.getElementById("clearBtn").onclick = () => {
+    if (!confirm("Точно очистити всі цілі?")) return;
+    send({ role: "admin", action: "clear" });
+  };
 </script>
 
 </body>
