@@ -1,248 +1,181 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://unpkg.com/leaflet-geojson-vt@1.0.1/dist/leaflet-geojson-vt.js"></script>
-<meta charset="utf-8">
-<title>Monitor</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-<style>
-  body {
-    margin: 0;
-    background: #0d0d0d; /* темний фон */
-  }
-
-  #map {
-    width: 100vw;
-    height: 100vh;
-    filter: brightness(1.1); /* трохи підсвітити темну карту */
-  }
-  #themeToggle {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 9999;
-  padding: 8px 14px;
-  background: rgba(20,20,20,0.85);
-  color: #eee;
-  border: 1px solid #555;
-  border-radius: 8px;
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  font-size: 14px;
-}
-
-body.light #themeToggle {
-  background: rgba(255,255,255,0.9);
-  color: #111;
-  border: 1px solid #ccc;
-}
-#clockBox {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 9999;
-  background: rgba(0,0,0,0.55);
-  padding: 8px 14px;
-  border-radius: 8px;
-  color: #fff;
-  font-family: Arial, sans-serif;
-  font-size: 16px;
-  backdrop-filter: blur(4px);
-  user-select: none;
-  pointer-events: none;
-}
-
-</style>
-
+  <meta charset="utf-8">
+  <title>Monitor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <style>
+    body{
+      margin:0;
+      background:#111;
+      overflow:hidden;
+      font-family:sans-serif;
+    }
+    #map{
+      position:absolute;
+      top:0;left:0;
+      width:100vw;
+      height:100vh;
+      z-index:1;
+    }
+    #hud{
+      position:absolute;
+      top:10px;
+      left:10px;
+      z-index:2;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+    #datetime{
+      padding:6px 10px;
+      background:rgba(0,0,0,0.6);
+      color:#fff;
+      border-radius:4px;
+      font-size:13px;
+    }
+    #themeToggle{
+      padding:6px 10px;
+      background:rgba(0,0,0,0.6);
+      color:#fff;
+      border-radius:4px;
+      border:1px solid #555;
+      cursor:pointer;
+      font-size:13px;
+    }
+  </style>
 </head>
 <body>
-  <div id="clockBox"></div>
-  <button id="themeToggle">🌙 Темна тема</button>
-  <div id="map"></div>
-</body>
 
+<div id="map"></div>
+
+<div id="hud">
+  <div id="datetime"></div>
+  <button id="themeToggle">Світла тема</button>
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-
+// ===== КАРТА =====
 const map = L.map("map").setView([49,31],6);
-L.tileLayer(
+
+const lightLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom:19,
+  attribution:"&copy; OpenStreetMap"
+});
+
+const darkLayer = L.tileLayer(
   "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
   {
-    attribution:
-      '&copy; <a href="https://carto.com/">CARTO</a> | Dark Matter tiles',
-    subdomains: "abcd",
-    maxZoom: 19
+    maxZoom:19,
+    attribution:"&copy; CartoDB & OpenStreetMap"
   }
-).addTo(map);
-  
-function updateClock() {
-    const box = document.getElementById("clockBox");
-    const now = new Date();
+);
 
-    const dateStr = now.toLocaleDateString("uk-UA", {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
+// стартуємо з темної
+let currentBase = darkLayer;
+darkLayer.addTo(map);
 
-    const timeStr = now.toLocaleTimeString("uk-UA", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-
-    box.textContent = `${dateStr} — ${timeStr}`;
+const themeBtn = document.getElementById("themeToggle");
+themeBtn.onclick = () => {
+  if (currentBase === darkLayer) {
+    map.removeLayer(darkLayer);
+    lightLayer.addTo(map);
+    currentBase = lightLayer;
+    themeBtn.textContent = "Темна тема";
+  } else {
+    map.removeLayer(lightLayer);
+    darkLayer.addTo(map);
+    currentBase = darkLayer;
+    themeBtn.textContent = "Світла тема";
   }
-
-  setInterval(updateClock, 1000);
-  updateClock();
-  
-const ICONS = {
-    x101: "models/x101.png",
-    shahed: "models/shahed.png",
-    iskander: "models/iskander.png",
-    kalibr: "models/kalibr.png"
 };
 
-// ІНДИВІДУАЛЬНІ OFFSET
+// ===== ДАТА/ЧАС =====
+const dtDiv = document.getElementById("datetime");
+function updateTime(){
+  const now = new Date();
+  const date = now.toLocaleDateString("uk-UA");
+  const time = now.toLocaleTimeString("uk-UA", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+  dtDiv.textContent = date + " " + time;
+}
+setInterval(updateTime,1000);
+updateTime();
+
+// ===== РАКЕТИ / ДРОНИ =====
+const ICONS = {
+  x101: "models/x101.png",
+  shahed: "models/shahed.png",
+  iskander: "models/iskander.png",
+  kalibr: "models/kalibr.png"
+};
+
+// індивідуальні офсети, як у тебе було
 const OFFSET = {
-    x101: -45,       // правильна
-    shahed: 0,   // повернути з ↑ на →
-    iskander: 0, // повернути з ↑ на →
-    kalibr: 0    // ПОТРІБНО ПІСЛЯ ТОГО ЯК ТИ КИНЕШ PNG
+  x101: -45,
+  shahed: 0,
+  iskander: 0,
+  kalibr: 0
 };
 
 function createMarker(lat, lon, url){
-    const div = document.createElement("div");
-    div.style.width="60px";
-    div.style.height="60px";
+  const div = document.createElement("div");
+  div.style.width="60px";
+  div.style.height="60px";
 
-    const img=document.createElement("img");
-    img.src=url;
-    img.style.width="100%";
-    img.style.height="100%";
-    img.style.transformOrigin="center";
+  const img=document.createElement("img");
+  img.src=url;
+  img.style.width="100%";
+  img.style.height="100%";
+  img.style.transformOrigin="center";
 
-    div.appendChild(img);
+  div.appendChild(img);
 
-    const icon=L.divIcon({className:"",html:div,iconSize:[60,60],iconAnchor:[30,30]});
+  const icon=L.divIcon({className:"",html:div,iconSize:[60,60],iconAnchor:[30,30]});
 
-    const m=L.marker([lat,lon],{icon});
-    m._img = img;
-    return m;
+  const m=L.marker([lat,lon],{icon});
+  m._img = img;
+  return m;
 }
 
 const markers = new Map();
 
 function update(list){
-    const exist=new Set();
+  const exist=new Set();
 
-    for(const t of list){
-        exist.add(t.id);
+  for(const t of list){
+    exist.add(t.id);
 
-        let m = markers.get(t.id);
-        if (!m){
-            m = createMarker(t.lat,t.lon,ICONS[t.type]);
-            m.addTo(map);
-            markers.set(t.id,m);
-        } else {
-            m.setLatLng([t.lat,t.lon]);
-        }
-
-        // ПРАВИЛЬНА МАТЕМАТИКА
-        let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
-        angle = 90 - angle + (OFFSET[t.type] || 0);
-
-        m._img.style.transform = `rotate(${angle}deg)`;
+    let m = markers.get(t.id);
+    if (!m){
+      m = createMarker(t.lat,t.lon,ICONS[t.type]);
+      m.addTo(map);
+      markers.set(t.id,m);
+    } else {
+      m.setLatLng([t.lat,t.lon]);
     }
 
-    markers.forEach((m,id)=>{
-        if (!exist.has(id)){
-            map.removeLayer(m);
-            markers.delete(id);
-        }
-    });
-}
+    // твоя "правильна математика"
+    let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
+    angle = 90 - angle + (OFFSET[t.type] || 0);
 
-const ws = new WebSocket(`wss://${location.host}`);
-ws.onmessage = e =>{
-    const d = JSON.parse(e.data);
-    if (d.type==="state") update(d.targets);
-    if (data.type === "alerts") {
-       applyAlerts(data.regions);
-}
+    m._img.style.transform = `rotate(${angle}deg)`;
+  }
 
-};
-
-  function applyAlerts(activeRegions) {
-  if (!oblastLayer) return;
-
-  oblastLayer.eachLayer(layer => {
-    const name = layer.feature.properties.name.toLowerCase();
-
-    if (activeRegions.includes(name)) {
-      layer.setStyle({
-        fillColor: "red",
-        fillOpacity: 0.6,
-        color: "red",
-        weight: 2
-      });
-    } else {
-      layer.setStyle({
-        fillColor: "#222",
-        fillOpacity: 0.2,
-        color: "#555",
-        weight: 1
-      });
+  markers.forEach((m,id)=>{
+    if (!exist.has(id)){
+      map.removeLayer(m);
+      markers.delete(id);
     }
   });
 }
 
-const themeBtn = document.getElementById("themeToggle");
-
-  // два варіанти тайлів
-  const LIGHT_TILE = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png");
-  const DARK_TILE = L.tileLayer(
-    "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    { subdomains: "abcd", maxZoom: 19 }
-  );
-
-  // Поточна тема
-  let currentTheme = localStorage.getItem("viewerTheme") || "dark";
-
-  // Підключаємо тайл за темою
-  function applyTheme(theme) {
-    if (theme === "light") {
-      map.removeLayer(DARK_TILE);
-      LIGHT_TILE.addTo(map);
-      themeBtn.textContent = "🌙 Темна тема";
-      document.body.classList.add("light");
-    } else {
-      map.removeLayer(LIGHT_TILE);
-      DARK_TILE.addTo(map);
-      themeBtn.textContent = "☀️ Світла тема";
-      document.body.classList.remove("light");
-    }
-    localStorage.setItem("viewerTheme", theme);
-    currentTheme = theme;
-  }
-
-  // Початкове застосування
-  applyTheme(currentTheme);
-
-  // Обробник натискання
-  themeBtn.onclick = () => {
-    applyTheme(currentTheme === "dark" ? "light" : "dark");
-  };
+const ws = new WebSocket(`wss://${location.host}`);
+ws.onmessage = e =>{
+  const d = JSON.parse(e.data);
+  if (d.type==="state") update(d.targets || []);
+};
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
-
