@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="https://unpkg.com/leaflet-geojson-vt@1.0.1/dist/leaflet-geojson-vt.js"></script>
 <meta charset="utf-8">
 <title>Monitor</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
@@ -168,8 +169,36 @@ const ws = new WebSocket(`wss://${location.host}`);
 ws.onmessage = e =>{
     const d = JSON.parse(e.data);
     if (d.type==="state") update(d.targets);
+    if (data.type === "alerts") {
+       applyAlerts(data.regions);
+}
+
 };
-    
+
+  function applyAlerts(activeRegions) {
+  if (!oblastLayer) return;
+
+  oblastLayer.eachLayer(layer => {
+    const name = layer.feature.properties.name.toLowerCase();
+
+    if (activeRegions.includes(name)) {
+      layer.setStyle({
+        fillColor: "red",
+        fillOpacity: 0.6,
+        color: "red",
+        weight: 2
+      });
+    } else {
+      layer.setStyle({
+        fillColor: "#222",
+        fillOpacity: 0.2,
+        color: "#555",
+        weight: 1
+      });
+    }
+  });
+}
+
 const themeBtn = document.getElementById("themeToggle");
 
   // два варіанти тайлів
@@ -210,6 +239,7 @@ const themeBtn = document.getElementById("themeToggle");
 
 </body>
 </html>
+
 
 
 
