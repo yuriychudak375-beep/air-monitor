@@ -236,6 +236,8 @@
     let rayonLayer = null;
     const rayonByKey = new Map(); // ключ → layer
     let activeKeys = new Set();
+    let lastAlertPacket = null;
+    let geojsonReady = false;
 
     function norm(str) {
       return String(str || "")
@@ -391,3 +393,4 @@
   </script>
 </body>
 </html>
+
