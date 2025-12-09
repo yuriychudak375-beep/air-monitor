@@ -55,6 +55,33 @@
       background: #222;
       color: #fff;
     }
+
+    /* Легенда підсвітки (можеш заховати/підкрутити) */
+    #legend {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+    body.light #legend {
+      background: rgba(255,255,255,0.8);
+      color: #111;
+    }
+    #legend-box {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      border-radius: 3px;
+      background: #ff3333;
+      box-shadow: 0 0 8px rgba(255,0,0,0.9);
+    }
   </style>
 </head>
 <body class="dark">
@@ -65,8 +92,12 @@
     <button id="themeToggle">Світла тема</button>
   </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <div id="legend">
+    <span id="legend-box"></span>
+    Активна повітряна тривога (район)
+  </div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     // ===== КАРТА =====
     const map = L.map("map").setView([49, 31], 6);
@@ -123,158 +154,8 @@
         document.body.classList.add("dark");
         themeBtn.textContent = "Світла тема";
       }
+      refreshRayonStyles();
     };
-
-    // ===== РАЙОНИ / ПІДСВІЧУВАННЯ ТРИВОГ =====
-
-    // Шар з районами і мапа "ключ → polygon layer"
-    let raionLayer = null;
-    const raionByKey = new Map();
-    const activeAlertLayers = new Set();
-
-    function baseRaionStyle() {
-      return {
-        color: "#666",
-        weight: 1,
-        fillColor: "#000",
-        fillOpacity: 0.05
-      };
-    }
-
-    // Нормалізація назв для порівняння
-    function normalizeName(str) {
-      return String(str)
-        .toLowerCase()
-        .replace(/[«»"']/g, "")
-        .replace(/\s+район/g, "")
-        .replace(/\s+область/g, "")
-        .replace(/\s+місто/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-
-    // Витягнути красиву назву району з properties
-    function getFeatureLabel(feature) {
-      const p = feature.properties || {};
-      return (
-        p.location_title ||
-        p.name_ua ||
-        p.NAME_UA ||
-        p.name ||
-        p.NAME ||
-        p.raion_ua ||
-        p.RAYON_UA ||
-        p.RAYON ||
-        ""
-      );
-    }
-
-    // З одного feature робимо кілька можливих ключів
-    function getFeatureKeys(feature) {
-      const p = feature.properties || {};
-      const keys = [];
-
-      if (p.location_uid != null) keys.push("uid:" + String(p.location_uid));
-      if (p.location_oblast_uid != null) keys.push("uid:" + String(p.location_oblast_uid));
-      if (p.uid != null) keys.push("uid:" + String(p.uid));
-      if (p.id != null) keys.push("uid:" + String(p.id));
-
-      const label = getFeatureLabel(feature);
-      if (label) keys.push("name:" + normalizeName(label));
-
-      const oblName = p.oblast || p.oblast_ua || p.OBLAST_UA;
-      if (oblName) keys.push("name:" + normalizeName(oblName));
-
-      return keys;
-    }
-
-    // Перетворюємо сирі дані тривог у масив об’єктів
-    function normalizeAlertList(raw) {
-      if (!Array.isArray(raw)) return [];
-      if (raw.length && typeof raw[0] === "string") {
-        // Якщо сервер шле просто ["Львівський район", ...]
-        return raw.map(name => ({ location_title: name }));
-      }
-      return raw;
-    }
-
-    function buildAlertKeys(alert) {
-      const keys = [];
-      const uid = alert.location_uid ?? alert.location_id ?? alert.id;
-      const oblUid = alert.location_oblast_uid;
-
-      if (uid != null) keys.push("uid:" + String(uid));
-      if (oblUid != null) keys.push("uid:" + String(oblUid));
-
-      if (alert.location_title) keys.push("name:" + normalizeName(alert.location_title));
-      if (alert.location_raion) keys.push("name:" + normalizeName(alert.location_raion));
-      if (alert.location_oblast) keys.push("name:" + normalizeName(alert.location_oblast));
-
-      return keys;
-    }
-
-    function clearAlertHighlight() {
-      activeAlertLayers.forEach(layer => {
-        layer.setStyle(baseRaionStyle());
-      });
-      activeAlertLayers.clear();
-    }
-
-    function applyAlertsFromServer(rawAlerts) {
-      if (!raionLayer) return;
-
-      const alerts = normalizeAlertList(rawAlerts);
-      clearAlertHighlight();
-
-      alerts.forEach(a => {
-        // Можна фільтрувати тільки "air_raid", якщо треба
-        // if (a.alert_type && a.alert_type !== "air_raid") return;
-
-        const keys = buildAlertKeys(a);
-        keys.forEach(k => {
-          const layer = raionByKey.get(k);
-          if (!layer) return;
-          if (activeAlertLayers.has(layer)) return;
-
-          layer.setStyle({
-            color: "#ff5252",
-            weight: 2,
-            fillColor: "#ff1744",
-            fillOpacity: 0.4
-          });
-          activeAlertLayers.add(layer);
-        });
-      });
-    }
-
-    // Щоб ти міг тестити з консолі:
-    // window.debugApplyAlerts([{ location_title: "Сумський район" }])
-    window.debugApplyAlerts = applyAlertsFromServer;
-
-    // Завантажуємо rayony.geojson
-    fetch("rayony.geojson")
-      .then(r => r.json())
-      .then(geo => {
-        raionLayer = L.geoJSON(geo, {
-          style: baseRaionStyle,
-          onEachFeature: (feature, layer) => {
-            const keys = getFeatureKeys(feature);
-            keys.forEach(k => {
-              if (!raionByKey.has(k)) {
-                raionByKey.set(k, layer);
-              }
-            });
-
-            const label = getFeatureLabel(feature);
-            if (label) {
-              layer.bindPopup(label);
-            }
-          }
-        }).addTo(map);
-      })
-      .catch(err => {
-        console.warn("Не вдалось завантажити rayony.geojson:", err);
-      });
 
     // ===== МОДЕЛЬКИ =====
     const MODEL_PNG = {
@@ -355,6 +236,124 @@
       });
     }
 
+    // ======== РАЙОНИ + ПІДСВІЧУВАННЯ ========
+
+    let rayonLayer = null;
+    const rayonLayersByKey = new Map();  // normName -> layer
+    let activeRayonKeys = new Set();
+
+    function normName(str) {
+      if (!str) return "";
+      return str
+        .toLowerCase()
+        .replace("район", "")
+        .replace("р-н", "")
+        .replace("р-н", "")
+        .replace("'", "")
+        .replace("’", "")
+        .replace("`", "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function getRayonName(props) {
+      if (!props) return "";
+      const candidates = [
+        "name", "NAME",
+        "name_ua", "NAME_UA",
+        "rayon", "RAYON",
+        "rayon_ua", "RAYON_UA",
+        "RAION", "raion", "raion_ua"
+      ];
+      for (const k of candidates) {
+        if (props[k]) return props[k];
+      }
+      // fallback: перший проп, який виглядає як стрінг
+      for (const k in props) {
+        if (typeof props[k] === "string") return props[k];
+      }
+      return "";
+    }
+
+    function getBaseRayonStyle() {
+      return {
+        color: isDark ? "#444" : "#666",
+        weight: 1,
+        fillOpacity: 0,
+      };
+    }
+
+    function getAlertRayonStyle() {
+      return {
+        color: "#ff3333",
+        weight: 2,
+        fillColor: "#ff0000",
+        fillOpacity: 0.45,
+      };
+    }
+
+    function refreshRayonStyles() {
+      rayonLayersByKey.forEach((layer, key) => {
+        if (activeRayonKeys.has(key)) {
+          layer.setStyle(getAlertRayonStyle());
+        } else {
+          layer.setStyle(getBaseRayonStyle());
+        }
+      });
+    }
+
+    // завантажуємо geojson з районами
+    fetch("rayony.geojson")
+      .then(r => r.json())
+      .then(data => {
+        rayonLayer = L.geoJSON(data, {
+          style: getBaseRayonStyle,
+          onEachFeature: (feature, layer) => {
+            const name = getRayonName(feature.properties);
+            const key = normName(name);
+            if (key) {
+              rayonLayersByKey.set(key, layer);
+            }
+            if (name) {
+              layer.bindPopup(name);
+            }
+          }
+        }).addTo(map);
+
+        console.log("Rayon layers loaded:", rayonLayersByKey.size);
+      })
+      .catch(err => {
+        console.error("Failed to load rayony.geojson:", err);
+      });
+
+    function applyAlertsToMap(alerts) {
+      if (!alerts || !Array.isArray(alerts) || rayonLayersByKey.size === 0) return;
+
+      const newActive = new Set();
+
+      alerts.forEach(a => {
+        if (a.alert_type !== "air_raid") return;
+        // беремо location_title типу "Сумський район"
+        const key = normName(a.location_title);
+        if (!key) return;
+        const layer = rayonLayersByKey.get(key);
+        if (!layer) return;
+
+        newActive.add(key);
+      });
+
+      activeRayonKeys = newActive;
+      refreshRayonStyles();
+    }
+
+    // debug у консолі:
+    // debugApplyAlerts([{location_title:"Сумський район", alert_type:"air_raid"}])
+    window.debugApplyAlerts = function(list) {
+      applyAlertsToMap(list);
+    };
+
+    // ======== WEBSOCKET ========
+
     const ws = new WebSocket(
       (location.protocol === "https:" ? "wss://" : "ws://") + location.host
     );
@@ -364,11 +363,17 @@
       let data;
       try { data = JSON.parse(ev.data); } catch { return; }
 
-      if (data.type === "state" && Array.isArray(data.targets)) {
-        applyState(data.targets);
+      if (data.type === "state") {
+        if (Array.isArray(data.targets)) {
+          applyState(data.targets);
+        }
+        if (Array.isArray(data.alerts)) {
+          applyAlertsToMap(data.alerts);
+        }
       } else if (data.type === "alerts") {
-        const list = data.alerts || data.regions || [];
-        applyAlertsFromServer(list);
+        if (Array.isArray(data.alerts)) {
+          applyAlertsToMap(data.alerts);
+        }
       }
     };
   </script>
