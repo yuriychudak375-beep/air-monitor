@@ -1,8 +1,7 @@
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const path = require("path");
-const fetch = require("node-fetch");          // <-- ДОДАНО
+const path = require("path");         
 require("dotenv").config();                   // <-- ДОДАНО
 
 const app = express();
@@ -138,3 +137,4 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
+
