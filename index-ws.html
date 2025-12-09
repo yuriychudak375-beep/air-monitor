@@ -235,7 +235,6 @@
     // ===== РАЙОНИ / ОБЛАСТІ (GEOJSON) =====
     let rayonLayer = null;
     const rayonByKey = new Map(); // ключ → layer
-    let activeKeys = new Set();
     let lastAlertPacket = null;
     let geojsonReady = false;
 
@@ -276,34 +275,62 @@
 
     // Підключаємо твій rayony.geojson
     fetch("rayony.geojson")
-  .then((r) => r.json())
-  .then((data) => {
-    
-    rayonLayer = L.geoJSON(data, {
-      style: baseStyle,
-      onEachFeature: (feature, layer) => {
-        const key = feature.properties?.NAME_3?.trim();
-        if (key) {
-          rayonByKey.set(key, layer);
+    .then(r => r.json())
+    .then(data => {
+      rayonLayer = L.geoJSON(data, {
+        style: feature => ({
+          color: "#555555",
+          weight: 1,
+          fillColor: "rgba(0, 0, 0, 0.3)",
+          fillOpacity: 0.4
+        }),
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties || {};
 
-          layer.on("mouseover", () => layer.setStyle(hoverStyle));
-          layer.on("mouseout", () => {
-            if (!activeKeys.has(key)) layer.setStyle(baseStyle);
+          // Назва району в попапі
+          const title =
+            p.NAME_1 || p.name || p.rayon_ua || p.display_name || "";
+
+          if (title) {
+            layer.bindPopup(title);
+          }
+
+          // Пишемо кілька можливих ID в Map, щоб потім по них підсвічувати
+          const idCandidates = [
+            p.location_uid,
+            p.location_oblast_uid,
+            p.uid,
+            p.id,
+            p.ID
+          ];
+
+          idCandidates.forEach(val => {
+            if (val != null) {
+              rayonByKey.set(String(val), layer);
+            }
           });
-
-          layer.bindPopup(`<b>${key}</b>`);
         }
+      }).addTo(map);
+
+      geojsonReady = true;
+
+      // Якщо ти потім будеш зберігати останній пакет тривог,
+      // тут можна буде одразу їх намалювати:
+      if (lastAlertPacket) {
+        applyAlertsToMap(lastAlertPacket);
       }
-    }).addTo(map);
 
-    // 🔥 GEOJSON ГОТОВИЙ
-    geojsonReady = true;
+      console.log("Rayon polygons loaded, count:", rayonByKey.size);
+    })
+    .catch(err => {
+      console.error("rayony.geojson load error:", err);
+    });
 
-    // 🔥 Якщо тривоги вже приходили — малюємо їх зараз
-    if (lastAlertPacket) {
-      applyAlertsToMap(lastAlertPacket);
-    }
-  });
+  // Заглушка щоб не ламалось, навіть якщо ти ще не робиш тривоги
+  function applyAlertsToMap(alerts) {
+    if (!alerts || !Array.isArray(alerts)) return;
+    // тут потім зробимо підсвічування районів по alerts
+  }
 
             // ID-шники (на всякий)
             const idCandidates = [
@@ -401,6 +428,7 @@
   </script>
 </body>
 </html>
+
 
 
 
