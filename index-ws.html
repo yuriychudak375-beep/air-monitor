@@ -276,27 +276,34 @@
 
     // Підключаємо твій rayony.geojson
     fetch("rayony.geojson")
-      .then(r => r.json())
-      .then(data => {
-        rayonLayer = L.geoJSON(data, {
-          style: baseStyle,
-          onEachFeature: (feature, layer) => {
-            const p = feature.properties || {};
-            const candidates = [
-              p.location_title,
-              p.location_raion,
-              p.raion_ua,
-              p.RAION_UA,
-              p.name,
-              p.NAME,
-              p.name_ua,
-              p.NAME_UA
-            ];
-            const title = candidates.find(Boolean) || "";
-            const key = norm(title);
-            if (key) {
-              rayonByKey.set("name:" + key, layer);
-            }
+  .then((r) => r.json())
+  .then((data) => {
+    
+    rayonLayer = L.geoJSON(data, {
+      style: baseStyle,
+      onEachFeature: (feature, layer) => {
+        const key = feature.properties?.NAME_3?.trim();
+        if (key) {
+          rayonByKey.set(key, layer);
+
+          layer.on("mouseover", () => layer.setStyle(hoverStyle));
+          layer.on("mouseout", () => {
+            if (!activeKeys.has(key)) layer.setStyle(baseStyle);
+          });
+
+          layer.bindPopup(`<b>${key}</b>`);
+        }
+      }
+    }).addTo(map);
+
+    // 🔥 GEOJSON ГОТОВИЙ
+    geojsonReady = true;
+
+    // 🔥 Якщо тривоги вже приходили — малюємо їх зараз
+    if (lastAlertPacket) {
+      applyAlertsToMap(lastAlertPacket);
+    }
+  });
 
             // ID-шники (на всякий)
             const idCandidates = [
@@ -382,15 +389,20 @@
           applyState(data.targets);
         }
         if (Array.isArray(data.alerts)) {
-          applyAlertsToMap(data.alerts);
+    lastAlertPacket = data.alerts;
+    if (geojsonReady) {
+        applyAlertsToMap(data.alerts);
+    }
+}
         }
       } else if (data.type === "alerts") {
-        if (Array.isArray(data.alerts)) {
-          applyAlertsToMap(data.alerts);
-        }
-      }
-    };
+    lastAlertPacket = data.alerts;
+    if (geojsonReady) {
+        applyAlertsToMap(data.alerts);
+    }
+}
   </script>
 </body>
 </html>
+
 
