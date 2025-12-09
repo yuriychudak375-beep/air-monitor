@@ -1,8 +1,9 @@
+// server-ws.js
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const path = require("path");         
-require("dotenv").config();                   // <-- ДОДАНО
+const path = require("path");
+const https = require("https");
 
 const app = express();
 const server = http.createServer(app);
@@ -10,10 +11,18 @@ const wss = new WebSocket.Server({ server });
 
 const ADMIN_PASSWORD = "42Adminpassfrommapofdrones42";
 
-// ======= MIDDLEWARE =======
+// 🔑 API-токен alerts.in.ua
+// АБО постав через змінну середовища ALERTS_TOKEN на Render
+// АБО тупо впиши свій токен замість PASTE_YOUR_TOKEN_HERE
+const ALERTS_TOKEN =
+  process.env.ALERTS_TOKEN && process.env.ALERTS_TOKEN !== "50384ea5708d0490af5054940304a4eda4413fbdab2203"
+    ? process.env.ALERTS_TOKEN
+    : "50384ea5708d0490af5054940304a4eda4413fbdab2203";
+
+// ========= MIDDLEWARE =========
 app.use(express.json());
 
-// ======= ROUTES =======
+// ========= ROUTES =========
 
 // Глядацька
 app.get("/", (req, res) => {
@@ -35,12 +44,13 @@ app.get("/admin-real", (req, res) => {
   res.sendFile(path.join(__dirname, "admin-ws.html"));
 });
 
-// Статика
+// Статика (модельки, geojson і т.д.)
 app.use(express.static(__dirname));
 
-// ======= TARGET DATA =======
+// ========= ДАНІ ПО ЦІЛЯХ =========
+
 let targets = [];
-let activeAlerts = [];   // <-- ТУТ БУДЕ СПИСОК ТРИВОГ З API
+let activeAlerts = []; // 🔴 тут буде список тривог з API
 
 function broadcast(obj) {
   const msg = JSON.stringify(obj);
@@ -49,15 +59,16 @@ function broadcast(obj) {
   });
 }
 
-// ======= WEBSOCKET =========
+// ========= WS =========
 wss.on("connection", (ws) => {
-  console.log("WS viewer connected");
+  console.log("WS client connected");
 
+  // при підключенні шлемо поточний стан
   ws.send(
     JSON.stringify({
       type: "state",
       targets,
-      alerts: activeAlerts,     // <-- РАЙОНИ З ТРИВОГАМИ
+      alerts: activeAlerts,
     })
   );
 
@@ -65,8 +76,11 @@ wss.on("connection", (ws) => {
     let data;
     try {
       data = JSON.parse(msg);
-    } catch { return; }
+    } catch {
+      return;
+    }
 
+    // керування цілями тільки з адмінки
     if (data.role === "admin") {
       if (data.action === "add") {
         const id = Date.now() + "_" + Math.random();
@@ -77,12 +91,13 @@ wss.on("connection", (ws) => {
       } else if (data.action === "clear") {
         targets = [];
       }
+
       broadcast({ type: "state", targets, alerts: activeAlerts });
     }
   });
 });
 
-// ======= TARGET MOVEMENT =======
+// Рух цілей
 setInterval(() => {
   targets.forEach((t) => {
     t.lat += t.dy * t.speed;
@@ -92,49 +107,66 @@ setInterval(() => {
   broadcast({ type: "state", targets, alerts: activeAlerts });
 }, 1000);
 
-// ============================================================
-// 🔥 API: ОТРИМАННЯ ТРИВОГ КОЖНІ 10 СЕКУНД
-// ============================================================
+// ========= ОПИТУВАННЯ API ТРИВОГ =========
 
-const TOKEN = process.env.ALERTS_TOKEN;
-
-async function fetchAlerts() {
-  if (!TOKEN) {
-    console.log("⚠️ ALERT: TOKEN not set in .env");
+function fetchActiveAlerts() {
+  if (!ALERTS_TOKEN || ALERTS_TOKEN === "PASTE_YOUR_TOKEN_HERE") {
+    // Якщо токен не вказаний — просто мовчки не шлемо тривоги
+    // Щоб нічого не ламати
     return;
   }
 
-  const url = `https://api.alerts.in.ua/v1/alerts/active.json?token=${TOKEN}`;
+  const url =
+    "https://api.alerts.in.ua/v1/alerts/active.json?token=" +
+    encodeURIComponent(ALERTS_TOKEN);
 
-  try {
-    const response = await fetch(url);
-    const json = await response.json();
+  https
+    .get(url, (res) => {
+      let body = "";
 
-    if (!Array.isArray(json)) {
-      console.log("❌ ALERT API returned unexpected structure");
-      return;
-    }
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
 
-    activeAlerts = json;  // зберігаємо
-    console.log("✔️ Alerts updated:", activeAlerts.length);
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(body);
+          // Документація каже, що тут або { alerts: [...] }, або одразу масив
+          let alerts = [];
 
-    broadcast({
-      type: "alerts",
-      alerts: activeAlerts,
+          if (Array.isArray(json)) {
+            alerts = json;
+          } else if (json && Array.isArray(json.alerts)) {
+            alerts = json.alerts;
+          } else {
+            console.log("ALERT API unexpected structure");
+            return;
+          }
+
+          // зберігаємо і розсилаємо
+          activeAlerts = alerts;
+          console.log("Active alerts:", activeAlerts.length);
+
+          broadcast({
+            type: "alerts",
+            alerts: activeAlerts,
+          });
+        } catch (e) {
+          console.log("ALERT parse error:", e.message);
+        }
+      });
+    })
+    .on("error", (err) => {
+      console.log("ALERT HTTPS error:", err.message);
     });
-
-  } catch (err) {
-    console.log("❌ ALERT FETCH ERROR:", err.message);
-  }
 }
 
-// запуск кожні 10 сек
-setInterval(fetchAlerts, 10000);
-fetchAlerts(); // перший запуск
+// кожні 10 секунд оновлюємо тривоги
+setInterval(fetchActiveAlerts, 10000);
+fetchActiveAlerts();
 
-// ======= START SERVER =======
+// ========= START =========
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
-
