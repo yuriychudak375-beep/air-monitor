@@ -74,6 +74,7 @@
       background: rgba(255,255,255,0.85);
       color: #111;
     }
+
     #legend-box {
       display: inline-block;
       width: 14px;
@@ -103,95 +104,225 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
 
+///////////////////////////////////////////////////////////////////
+//  MAP
+///////////////////////////////////////////////////////////////////
+
 const map = L.map("map").setView([49,31],6);
+
 const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:10,minZoom:4});
 const tilesDark  = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:10,minZoom:4,subdomains:"abcd"});
 let isDark = true;
 tilesDark.addTo(map);
 
-/* Clock */
+///////////////////////////////////////////////////////////////////
+//  CLOCK
+///////////////////////////////////////////////////////////////////
+
 const clockEl=document.getElementById("clock");
 function updateClock(){
   clockEl.textContent=new Date().toLocaleString("uk-UA",{timeZone:"Europe/Kyiv",
     day:"2-digit",month:"2-digit",year:"numeric",
     hour:"2-digit",minute:"2-digit",second:"2-digit"});
 }
-setInterval(updateClock,1000); updateClock();
+setInterval(updateClock,1000);
+updateClock();
 
-/* Theme switch */
+///////////////////////////////////////////////////////////////////
+//  THEME BUTTON
+///////////////////////////////////////////////////////////////////
+
 document.getElementById("themeToggle").onclick=()=>{
   if(isDark){
-    map.removeLayer(tilesDark); tilesLight.addTo(map);
-    isDark=false; document.body.classList.replace("dark","light");
+    map.removeLayer(tilesDark);
+    tilesLight.addTo(map);
+    isDark=false;
+    document.body.classList.replace("dark","light");
     themeToggle.textContent="Темна тема";
   } else {
-    map.removeLayer(tilesLight); tilesDark.addTo(map);
-    isDark=true; document.body.classList.replace("light","dark");
+    map.removeLayer(tilesLight);
+    tilesDark.addTo(map);
+    isDark=true;
+    document.body.classList.replace("light","dark");
     themeToggle.textContent="Світла тема";
   }
 };
 
-/* MODELS */
-const MODEL_PNG={x101:"models/x101.png",shahed:"models/shahed.png",
-                 iskander:"models/iskander.png",kalibr:"models/kalibr.png"};
+///////////////////////////////////////////////////////////////////
+//  MODELS (FLYING OBJECTS)
+///////////////////////////////////////////////////////////////////
+
+const MODEL_PNG={
+  x101:"models/x101.png",
+  shahed:"models/shahed.png",
+  iskander:"models/iskander.png",
+  kalibr:"models/kalibr.png"
+};
+
 const ROT_OFFSET={x101:-45,shahed:0,iskander:0,kalibr:0};
 
 function createMarker(t){
   const div=document.createElement("div");
-  div.style.width="60px"; div.style.height="60px";
-  div.style.display="flex"; div.style.alignItems="center"; div.style.justifyContent="center";
+  div.style.width="60px";
+  div.style.height="60px";
+  div.style.display="flex";
+  div.style.alignItems="center";
+  div.style.justifyContent="center";
+
   const img=document.createElement("img");
-  img.src=MODEL_PNG[t.type]||MODEL_PNG["x101"];
-  img.style.width="100%"; img.style.height="100%"; img.style.objectFit="contain"; img.style.transformOrigin="center";
+  img.src=MODEL_PNG[t.type]||MODEL_PNG.x101;
+  img.style.width="100%";
+  img.style.height="100%";
+  img.style.objectFit="contain";
+  img.style.transformOrigin="center";
+
   div.appendChild(img);
-  const icon=L.divIcon({className:"",html:div,iconSize:[60,60],iconAnchor:[30,30]});
-  const m=L.marker([t.lat,t.lon],{icon}); m._imgRef=img; return m;
+
+  const icon=L.divIcon({
+    className:"",
+    html:div,
+    iconSize:[60,60],
+    iconAnchor:[30,30]
+  });
+
+  const m=L.marker([t.lat,t.lon],{icon});
+  m._imgRef=img;
+  return m;
 }
+
 const markers=new Map();
+
 function update(list){
   const alive=new Set();
   list.forEach(t=>{
     alive.add(t.id);
     let m=markers.get(t.id);
-    if(!m){ m=createMarker(t); m.addTo(map); markers.set(t.id,m); }
-    else m.setLatLng([t.lat,t.lon]);
+    if(!m){
+      m=createMarker(t);
+      m.addTo(map);
+      markers.set(t.id,m);
+    } else {
+      m.setLatLng([t.lat,t.lon]);
+    }
+
     let ang=Math.atan2(t.dy,t.dx)*180/Math.PI;
     ang=90-ang+(ROT_OFFSET[t.type]||0);
     m._imgRef.style.transform=`rotate(${ang}deg)`;
   });
-  markers.forEach((m,id)=>{if(!alive.has(id)){map.removeLayer(m);markers.delete(id);}});
+
+  markers.forEach((m,id)=>{
+    if(!alive.has(id)){
+      map.removeLayer(m);
+      markers.delete(id);
+    }
+  });
 }
 
-/* ===== GEOJSON FIXED ===== */
+///////////////////////////////////////////////////////////////////
+//  GEOJSON + ALERT HIGHLIGHT
+///////////////////////////////////////////////////////////////////
+
 let rayonLayer=null;
 let rayonByName=new Map();
+let activeRayons=new Set();
+
+// нормалізація назв під alert API
+function normName(str){
+  return String(str||"")
+    .toLowerCase()
+    .replace("район","")
+    .replace("область","")
+    .replace(/[«»"']/g,"")
+    .trim();
+}
+
+function baseRayonStyle(){
+  return {
+    color:"#666",
+    weight:1,
+    fillColor:"#000",
+    fillOpacity:0.05
+  };
+}
+
+function alertRayonStyle(){
+  return {
+    color:"#ff3333",
+    weight:2,
+    fillColor:"#ff0000",
+    fillOpacity:0.45
+  };
+}
+
+function applyAlertsToRayons(alertList){
+  if(!alertList || !Array.isArray(alertList)) return;
+
+  const newActive=new Set();
+
+  for(const a of alertList){
+    if(a.alert_type!=="air_raid") continue;
+    if(!a.location_title) continue;
+    const key=normName(a.location_title);
+
+    if(rayonByName.has(key)){
+      newActive.add(key);
+    }
+  }
+
+  rayonByName.forEach((layer,name)=>{
+    if(newActive.has(name)) layer.setStyle(alertRayonStyle());
+    else layer.setStyle(baseRayonStyle());
+  });
+
+  activeRayons=newActive;
+}
+
+// DEBUG
+window.debugAlert = function(name){
+  applyAlertsToRayons([{location_title:name,alert_type:"air_raid"}]);
+};
+
+///////////////////////////////////////////////////////////////////
+//  LOAD GEOJSON
+///////////////////////////////////////////////////////////////////
 
 fetch(window.location.origin + "/rayony.geojson")
   .then(r=>r.json())
   .then(data=>{
     rayonLayer=L.geoJSON(data,{
-      style:{color:"#666",weight:1,fillColor:"#000",fillOpacity:0.05},
+      style:baseRayonStyle,
       onEachFeature:(feature,layer)=>{
         const props=feature.properties||{};
-        const name=(props.NAME_1 || props.name || "").toLowerCase().trim();  // FIXED LINE
+        const name=normName(props.NAME_1 || props.name || "");
         if(name){
           rayonByName.set(name,layer);
           layer.bindPopup(props.NAME_1 || props.name);
         }
       }
     }).addTo(map);
+
     console.log("Rayons loaded:",rayonByName.size);
   })
   .catch(err=>console.error("GeoJSON ERROR:",err));
 
-/* WebSocket */
+///////////////////////////////////////////////////////////////////
+//  WEBSOCKET
+///////////////////////////////////////////////////////////////////
+
 const ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host);
-ws.onmessage=e=>{
+
+ws.onmessage = e => {
   const d=JSON.parse(e.data);
-  if(d.type==="state") update(d.targets);
+
+  if(d.type==="state"){
+    update(d.targets);
+  }
+
+  if(d.type==="alerts"){
+    applyAlertsToRayons(d.alerts);
+  }
 };
 
 </script>
 </body>
 </html>
-    
