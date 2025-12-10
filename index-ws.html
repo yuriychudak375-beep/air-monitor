@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <title>Air Monitor — Viewer</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
-  
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
   <style>
     html, body {
       margin: 0;
@@ -14,6 +15,7 @@
       overflow: hidden;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+
     body.dark { background: #050608; color: #eee; }
     body.light { background: #f2f2f2; color: #111; }
 
@@ -22,12 +24,13 @@
       height: 100vh;
     }
 
+    /* HUD з часом + перемикач теми */
     #hud {
       position: fixed;
       top: 10px;
       left: 10px;
       z-index: 1000;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.65);
       color: #fff;
       padding: 6px 10px;
       border-radius: 8px;
@@ -35,7 +38,7 @@
       backdrop-filter: blur(6px);
     }
     body.light #hud {
-      background: rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.9);
       color: #111;
     }
     #clock {
@@ -55,6 +58,33 @@
       background: #222;
       color: #fff;
     }
+
+    /* Легенда тривог */
+    #legend {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+    body.light #legend {
+      background: rgba(255,255,255,0.9);
+      color: #111;
+    }
+    #legend-box {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      border-radius: 3px;
+      background: #ff3333;
+      box-shadow: 0 0 8px rgba(255,0,0,0.9);
+    }
   </style>
 </head>
 <body class="dark">
@@ -65,16 +95,22 @@
     <button id="themeToggle">Світла тема</button>
   </div>
 
-  <!-- Leaflet -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <div id="legend">
+    <span id="legend-box"></span>
+    Активна повітряна тривога (район / область)
+  </div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // ===== КАРТА =====
+    // =========================
+    // 1. КАРТА + ТЕМИ
+    // =========================
     const map = L.map("map").setView([49, 31], 6);
 
     const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 10,
-      minZoom: 4
+      minZoom: 4,
+      attribution: "&copy; OpenStreetMap"
     });
 
     const tilesDark = L.tileLayer(
@@ -82,14 +118,15 @@
       {
         maxZoom: 10,
         minZoom: 4,
-        subdomains: "abcd"
+        subdomains: "abcd",
+        attribution: "&copy; OpenStreetMap & CartoDB"
       }
     );
 
     let isDark = true;
     tilesDark.addTo(map);
 
-    // ===== ГОДИННИК =====
+    // Годинник
     const clockEl = document.getElementById("clock");
     function updateClock() {
       const now = new Date();
@@ -106,7 +143,7 @@
     updateClock();
     setInterval(updateClock, 1000);
 
-    // ===== ПЕРЕМИКАЧ ТЕМИ =====
+    // Перемикач теми
     const themeBtn = document.getElementById("themeToggle");
     themeBtn.onclick = () => {
       if (isDark) {
@@ -124,17 +161,21 @@
         document.body.classList.add("dark");
         themeBtn.textContent = "Світла тема";
       }
+      // оновити стилі районів після зміни теми
       refreshRayonStyles();
     };
 
-    // ===== МОДЕЛЬКИ ЦІЛЕЙ =====
+    // =========================
+    // 2. МОДЕЛІ РАКЕТ / ДРОНІВ
+    // =========================
     const MODEL_PNG = {
-      x101: "models/x101.png",
+      x101:   "models/x101.png",
       shahed: "models/shahed.png",
       iskander: "models/iskander.png",
       kalibr: "models/kalibr.png"
     };
 
+    // поправки до орієнтації (якщо треба)
     const ROT_OFFSET = {
       x101: -45,
       shahed: 0,
@@ -151,11 +192,12 @@
       div.style.justifyContent = "center";
 
       const img = document.createElement("img");
-      img.src = MODEL_PNG[t.type] || MODEL_PNG.x101;
+      img.src = MODEL_PNG[t.type] || MODEL_PNG["x101"];
       img.style.width = "100%";
       img.style.height = "100%";
       img.style.objectFit = "contain";
       img.style.transformOrigin = "center";
+      img.style.transition = "transform 0.1s linear";
 
       div.appendChild(img);
 
@@ -173,10 +215,11 @@
 
     const markers = new Map();
 
-    function applyState(targets) {
+    function applyState(list) {
       const alive = new Set();
 
-      targets.forEach(t => {
+      list.forEach(t => {
+        if (typeof t.lat !== "number" || typeof t.lon !== "number") return;
         alive.add(t.id);
 
         let marker = markers.get(t.id);
@@ -188,11 +231,16 @@
           marker.setLatLng([t.lat, t.lon]);
         }
 
-        let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
-        angle = 90 - angle + (ROT_OFFSET[t.type] || 0);
-        marker._imgRef.style.transform = `rotate(${angle}deg)`;
+        // кут за вектором dx/dy
+        if (typeof t.dx === "number" && typeof t.dy === "number") {
+          let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI; // геометричний кут
+          // перетворюємо до "зверху-вниз"
+          angle = 90 - angle + (ROT_OFFSET[t.type] || 0);
+          marker._imgRef.style.transform = `rotate(${angle}deg)`;
+        }
       });
 
+      // прибираємо вбиті цілі
       markers.forEach((m, id) => {
         if (!alive.has(id)) {
           map.removeLayer(m);
@@ -201,136 +249,644 @@
       });
     }
 
-// ====================== РАЙОНИ / ОБЛАСТІ (GEOJSON) ======================
-let geojsonReady = false;
-let rayonLayer = null;
-const rayonByKey = new Map();
-let activeKeys = new Set();
-let lastAlertPacket = null;
+    // =========================
+    // 3. РАЙОНИ / ОБЛАСТІ (GEOJSON)
+    // =========================
 
-function normName(str) {
-  return String(str || "")
-    .toLowerCase()
-    .replace(/[«»"']/g, "")
-    .replace(/район/g, "")
-    .replace(/область/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+    let geojsonReady = false;
+    let rayonLayer = null;
+    const rayonByKey = new Map(); // ключ → шар
+    let activeKeys = new Set();
+    let lastAlertPacket = null;
 
-function baseStyle() {
-  return {
-    color: isDark ? "#555" : "#777",
-    weight: 1,
-    fillColor: isDark ? "#000" : "#fff",
-    fillOpacity: 0.08
-  };
-}
+    function normName(str) {
+      return String(str || "")
+        .toLowerCase()
+        .replace(/[«»"']/g, "")
+        .replace(/район/g, "")
+        .replace(/область/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
 
-function alertStyle() {
-  return {
-    color: "#ff3333",
-    weight: 2,
-    fillColor: "#ff0000",
-    fillOpacity: 0.4
-  };
-}
+    function baseStyle() {
+      return {
+        color: isDark ? "#555" : "#777",
+        weight: 1,
+        fillColor: isDark ? "#000" : "#fff",
+        fillOpacity: 0.08
+      };
+    }
 
-function refreshRayonStyles() {
-  rayonByKey.forEach((layer, key) => {
-    if (activeKeys.has(key)) layer.setStyle(alertStyle());
-    else layer.setStyle(baseStyle());
-  });
-}
+    function alertStyle() {
+      return {
+        color: "#ff3333",
+        weight: 2,
+        fillColor: "#ff0000",
+        fillOpacity: 0.4
+      };
+    }
 
-// ---------- ПІДКЛЮЧЕННЯ rayony.geojson ----------
-fetch("rayony.geojson")
-  .then(r => r.json())
-  .then(data => {
-    rayonLayer = L.geoJSON(data, {
-      style: baseStyle,
-      onEachFeature: (feature, layer) => {
-        const p = feature.properties || {};
+    function refreshRayonStyles() {
+      rayonByKey.forEach((layer, key) => {
+        if (activeKeys.has(key)) {
+          layer.setStyle(alertStyle());
+        } else {
+          layer.setStyle(baseStyle());
+        }
+      });
+    }
 
-        const title =
-          p.NAME_1 ||
-          p.name ||
-          p.rayon_ua ||
-          p.display_name ||
-          "";
+    // Підключення rayony.geojson з кореня
+    fetch("rayony.geojson")
+      .then(r => r.json())
+      .then(data => {
+        rayonLayer = L.geoJSON(data, {
+          style: baseStyle,
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
 
-        if (title) layer.bindPopup(title);
+            // шукаємо назву району/області в різних полях
+            const title =
+              p.NAME_1 ||
+              p.name ||
+              p.rayon_ua ||
+              p.display_name ||
+              p.ADM2_UA ||
+              p.ADM2_EN ||
+              "";
 
-        // ID
-        [
-          p.location_uid,
-          p.location_oblast_uid,
-          p.uid,
-          p.id,
-          p.ID
-        ].forEach(v => {
-          if (v != null) rayonByKey.set("id:" + String(v), layer);
+            if (title) {
+              layer.bindPopup(title);
+            }
+
+            // ID/UID, якщо раптом є
+            [
+              p.location_uid,
+              p.location_oblast_uid,
+              p.uid,
+              p.id,
+              p.ID,
+              p.OBJECTID
+            ].forEach(v => {
+              if (v != null) {
+                rayonByKey.set("id:" + String(v), layer);
+              }
+            });
+
+            // варіанти ключів по назві
+            [
+              p.NAME_1,
+              p.name,
+              p.rayon_ua,
+              p.display_name,
+              p.ADM2_UA,
+              p.ADM2_EN
+            ].forEach(n => {
+              if (!n) return;
+              const key = "name:" + normName(n);
+              if (!rayonByKey.has(key)) {
+                rayonByKey.set(key, layer);
+              }
+            });
+          }
+        }).addTo(map);
+
+        geojsonReady = true;
+        console.log("Rayon polygons loaded:", rayonByKey.size);
+
+        if (lastAlertPacket) {
+          applyAlertsToMap(lastAlertPacket);
+        }
+      })
+      .catch(err => {
+        console.error("rayony.geojson load error:", err);
+      });
+
+    // логіка підсвічування
+    function applyAlertsToMap(alerts) {
+      if (!geojsonReady || !alerts || !Array.isArray(alerts)) return;
+
+      const next = new Set();
+
+      alerts.forEach(a => {
+        if (a.alert_type && a.alert_type !== "air_raid") return;
+
+        const keys = [];
+
+        if (a.location_uid != null) {
+          keys.push("id:" + String(a.location_uid));
+        }
+        if (a.location_oblast_uid != null) {
+          keys.push("id:" + String(a.location_oblast_uid));
+        }
+
+        if (a.location_title) {
+          keys.push("name:" + normName(a.location_title));
+        }
+        if (a.location_raion) {
+          keys.push("name:" + normName(a.location_raion));
+        }
+        if (a.location_oblast) {
+          keys.push("name:" + normName(a.location_oblast));
+        }
+
+        keys.forEach(k => {
+          if (rayonByKey.has(k)) {
+            next.add(k);
+          }
         });
+      });
 
-        // НАЗВИ
-        [
-          p.NAME_1,
-          p.name,
-          p.rayon_ua,
-          p.display_name
-        ].forEach(n => {
-          if (n) rayonByKey.set("name:" + normName(n), layer);
-        });
+      activeKeys = next;
+      refreshRayonStyles();
+    }
+
+    // debug із консолі:
+    // debugApplyAlerts([{ location_title: "Сумський район", alert_type: "air_raid" }])
+    window.debugApplyAlerts = function(list) {
+      lastAlertPacket = list;
+      if (geojsonReady) applyAlertsToMap(list);
+    };
+
+    // =========================
+    // 4. WebSocket
+    // =========================
+    const ws = new WebSocket(
+      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+    );
+
+    ws.onopen = () => console.log("WS viewer connected");
+
+    ws.onmessage = e => {
+      let d;
+      try {
+        d = JSON.parse(e.data);
+      } catch (err) {
+        console.error("WS parse error:", err);
+        return;
       }
-    }).addTo(map);
 
-    geojsonReady = true;
-    console.log("Rayons loaded:", rayonByKey.size);
+      if (d.type === "state") {
+        if (Array.isArray(d.targets)) {
+          applyState(d.targets);
+        }
+      }
 
-    if (lastAlertPacket) applyAlertsToMap(lastAlertPacket);
-  })
-  .catch(err => console.error("rayony.geojson load error:", err));
+      if (d.type === "alerts") {
+        const arr = Array.isArray(d.alerts)
+          ? d.alerts
+          : Array.isArray(d.regions)
+          ? d.regions
+          : null;
 
-// ---------- ЛОГІКА ПІДСВІЧУВАННЯ ----------
-function applyAlertsToMap(alerts) {
-  if (!geojsonReady || !alerts || !Array.isArray(alerts)) return;
+        if (arr) {
+          lastAlertPacket = arr;
+          if (geojsonReady) {
+            applyAlertsToMap(arr);
+          }
+        }
+      }
+    };
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <title>Air Monitor — Viewer</title>
 
-  const next = new Set();
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 
-  alerts.forEach(a => {
-    if (a.alert_type && a.alert_type !== "air_raid") return;
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-    const keys = [];
+    body.dark { background: #050608; color: #eee; }
+    body.light { background: #f2f2f2; color: #111; }
 
-    if (a.location_uid != null)
-      keys.push("id:" + String(a.location_uid));
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
 
-    if (a.location_oblast_uid != null)
-      keys.push("id:" + String(a.location_oblast_uid));
+    /* HUD з часом + перемикач теми */
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      backdrop-filter: blur(6px);
+    }
+    body.light #hud {
+      background: rgba(255,255,255,0.9);
+      color: #111;
+    }
+    #clock {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    #themeToggle {
+      border: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      background: #2d6cff;
+      color: #fff;
+    }
+    body.light #themeToggle {
+      background: #222;
+      color: #fff;
+    }
 
-    if (a.location_title)
-      keys.push("name:" + normName(a.location_title));
+    /* Легенда тривог */
+    #legend {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+    body.light #legend {
+      background: rgba(255,255,255,0.9);
+      color: #111;
+    }
+    #legend-box {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      border-radius: 3px;
+      background: #ff3333;
+      box-shadow: 0 0 8px rgba(255,0,0,0.9);
+    }
+  </style>
+</head>
+<body class="dark">
+  <div id="map"></div>
 
-    if (a.location_raion)
-      keys.push("name:" + normName(a.location_raion));
+  <div id="hud">
+    <div id="clock">--:--:--</div>
+    <button id="themeToggle">Світла тема</button>
+  </div>
 
-    if (a.location_oblast)
-      keys.push("name:" + normName(a.location_oblast));
+  <div id="legend">
+    <span id="legend-box"></span>
+    Активна повітряна тривога (район / область)
+  </div>
 
-    keys.forEach(k => {
-      if (rayonByKey.has(k)) next.add(k);
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // =========================
+    // 1. КАРТА + ТЕМИ
+    // =========================
+    const map = L.map("map").setView([49, 31], 6);
+
+    const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 10,
+      minZoom: 4,
+      attribution: "&copy; OpenStreetMap"
     });
-  });
 
-  activeKeys = next;
-  refreshRayonStyles();
-}
+    const tilesDark = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 10,
+        minZoom: 4,
+        subdomains: "abcd",
+        attribution: "&copy; OpenStreetMap & CartoDB"
+      }
+    );
 
-// debug
-window.debugApplyAlerts = list => {
-  lastAlertPacket = list;
-  if (geojsonReady) applyAlertsToMap(list);
-};arr = Array.isArray(d.alerts)
+    let isDark = true;
+    tilesDark.addTo(map);
+
+    // Годинник
+    const clockEl = document.getElementById("clock");
+    function updateClock() {
+      const now = new Date();
+      clockEl.textContent = now.toLocaleString("uk-UA", {
+        timeZone: "Europe/Kyiv",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Перемикач теми
+    const themeBtn = document.getElementById("themeToggle");
+    themeBtn.onclick = () => {
+      if (isDark) {
+        map.removeLayer(tilesDark);
+        tilesLight.addTo(map);
+        isDark = false;
+        document.body.classList.remove("dark");
+        document.body.classList.add("light");
+        themeBtn.textContent = "Темна тема";
+      } else {
+        map.removeLayer(tilesLight);
+        tilesDark.addTo(map);
+        isDark = true;
+        document.body.classList.remove("light");
+        document.body.classList.add("dark");
+        themeBtn.textContent = "Світла тема";
+      }
+      // оновити стилі районів після зміни теми
+      refreshRayonStyles();
+    };
+
+    // =========================
+    // 2. МОДЕЛІ РАКЕТ / ДРОНІВ
+    // =========================
+    const MODEL_PNG = {
+      x101:   "models/x101.png",
+      shahed: "models/shahed.png",
+      iskander: "models/iskander.png",
+      kalibr: "models/kalibr.png"
+    };
+
+    // поправки до орієнтації (якщо треба)
+    const ROT_OFFSET = {
+      x101: -45,
+      shahed: 0,
+      iskander: 0,
+      kalibr: 0
+    };
+
+    function createMarker(t) {
+      const div = document.createElement("div");
+      div.style.width = "60px";
+      div.style.height = "60px";
+      div.style.display = "flex";
+      div.style.alignItems = "center";
+      div.style.justifyContent = "center";
+
+      const img = document.createElement("img");
+      img.src = MODEL_PNG[t.type] || MODEL_PNG["x101"];
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      img.style.transformOrigin = "center";
+      img.style.transition = "transform 0.1s linear";
+
+      div.appendChild(img);
+
+      const icon = L.divIcon({
+        className: "",
+        html: div,
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
+      });
+
+      const marker = L.marker([t.lat, t.lon], { icon });
+      marker._imgRef = img;
+      return marker;
+    }
+
+    const markers = new Map();
+
+    function applyState(list) {
+      const alive = new Set();
+
+      list.forEach(t => {
+        if (typeof t.lat !== "number" || typeof t.lon !== "number") return;
+        alive.add(t.id);
+
+        let marker = markers.get(t.id);
+        if (!marker) {
+          marker = createMarker(t);
+          marker.addTo(map);
+          markers.set(t.id, marker);
+        } else {
+          marker.setLatLng([t.lat, t.lon]);
+        }
+
+        // кут за вектором dx/dy
+        if (typeof t.dx === "number" && typeof t.dy === "number") {
+          let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI; // геометричний кут
+          // перетворюємо до "зверху-вниз"
+          angle = 90 - angle + (ROT_OFFSET[t.type] || 0);
+          marker._imgRef.style.transform = `rotate(${angle}deg)`;
+        }
+      });
+
+      // прибираємо вбиті цілі
+      markers.forEach((m, id) => {
+        if (!alive.has(id)) {
+          map.removeLayer(m);
+          markers.delete(id);
+        }
+      });
+    }
+
+    // =========================
+    // 3. РАЙОНИ / ОБЛАСТІ (GEOJSON)
+    // =========================
+
+    let geojsonReady = false;
+    let rayonLayer = null;
+    const rayonByKey = new Map(); // ключ → шар
+    let activeKeys = new Set();
+    let lastAlertPacket = null;
+
+    function normName(str) {
+      return String(str || "")
+        .toLowerCase()
+        .replace(/[«»"']/g, "")
+        .replace(/район/g, "")
+        .replace(/область/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function baseStyle() {
+      return {
+        color: isDark ? "#555" : "#777",
+        weight: 1,
+        fillColor: isDark ? "#000" : "#fff",
+        fillOpacity: 0.08
+      };
+    }
+
+    function alertStyle() {
+      return {
+        color: "#ff3333",
+        weight: 2,
+        fillColor: "#ff0000",
+        fillOpacity: 0.4
+      };
+    }
+
+    function refreshRayonStyles() {
+      rayonByKey.forEach((layer, key) => {
+        if (activeKeys.has(key)) {
+          layer.setStyle(alertStyle());
+        } else {
+          layer.setStyle(baseStyle());
+        }
+      });
+    }
+
+    // Підключення rayony.geojson з кореня
+    fetch("rayony.geojson")
+      .then(r => r.json())
+      .then(data => {
+        rayonLayer = L.geoJSON(data, {
+          style: baseStyle,
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+
+            // шукаємо назву району/області в різних полях
+            const title =
+              p.NAME_1 ||
+              p.name ||
+              p.rayon_ua ||
+              p.display_name ||
+              p.ADM2_UA ||
+              p.ADM2_EN ||
+              "";
+
+            if (title) {
+              layer.bindPopup(title);
+            }
+
+            // ID/UID, якщо раптом є
+            [
+              p.location_uid,
+              p.location_oblast_uid,
+              p.uid,
+              p.id,
+              p.ID,
+              p.OBJECTID
+            ].forEach(v => {
+              if (v != null) {
+                rayonByKey.set("id:" + String(v), layer);
+              }
+            });
+
+            // варіанти ключів по назві
+            [
+              p.NAME_1,
+              p.name,
+              p.rayon_ua,
+              p.display_name,
+              p.ADM2_UA,
+              p.ADM2_EN
+            ].forEach(n => {
+              if (!n) return;
+              const key = "name:" + normName(n);
+              if (!rayonByKey.has(key)) {
+                rayonByKey.set(key, layer);
+              }
+            });
+          }
+        }).addTo(map);
+
+        geojsonReady = true;
+        console.log("Rayon polygons loaded:", rayonByKey.size);
+
+        if (lastAlertPacket) {
+          applyAlertsToMap(lastAlertPacket);
+        }
+      })
+      .catch(err => {
+        console.error("rayony.geojson load error:", err);
+      });
+
+    // логіка підсвічування
+    function applyAlertsToMap(alerts) {
+      if (!geojsonReady || !alerts || !Array.isArray(alerts)) return;
+
+      const next = new Set();
+
+      alerts.forEach(a => {
+        if (a.alert_type && a.alert_type !== "air_raid") return;
+
+        const keys = [];
+
+        if (a.location_uid != null) {
+          keys.push("id:" + String(a.location_uid));
+        }
+        if (a.location_oblast_uid != null) {
+          keys.push("id:" + String(a.location_oblast_uid));
+        }
+
+        if (a.location_title) {
+          keys.push("name:" + normName(a.location_title));
+        }
+        if (a.location_raion) {
+          keys.push("name:" + normName(a.location_raion));
+        }
+        if (a.location_oblast) {
+          keys.push("name:" + normName(a.location_oblast));
+        }
+
+        keys.forEach(k => {
+          if (rayonByKey.has(k)) {
+            next.add(k);
+          }
+        });
+      });
+
+      activeKeys = next;
+      refreshRayonStyles();
+    }
+
+    // debug із консолі:
+    // debugApplyAlerts([{ location_title: "Сумський район", alert_type: "air_raid" }])
+    window.debugApplyAlerts = function(list) {
+      lastAlertPacket = list;
+      if (geojsonReady) applyAlertsToMap(list);
+    };
+
+    // =========================
+    // 4. WebSocket
+    // =========================
+    const ws = new WebSocket(
+      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+    );
+
+    ws.onopen = () => console.log("WS viewer connected");
+
+    ws.onmessage = e => {
+      let d;
+      try {
+        d = JSON.parse(e.data);
+      } catch (err) {
+        console.error("WS parse error:", err);
+        return;
+      }
+
+      if (d.type === "state") {
+        if (Array.isArray(d.targets)) {
+          applyState(d.targets);
+        }
+      }
+
+      if (d.type === "alerts") {
+        const arr = Array.isArray(d.alerts)
           ? d.alerts
           : Array.isArray(d.regions)
           ? d.regions
@@ -347,5 +903,3 @@ window.debugApplyAlerts = list => {
   </script>
 </body>
 </html>
-
-
