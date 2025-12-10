@@ -289,6 +289,7 @@ window.debugAlert = function(name){
 fetch(window.location.origin + "/rayony.geojson")
   .then(r=>r.json())
   .then(data=>{
+    console.log("DEBUG FIRST FEATURE:", data.features?.[0]?.properties);
     rayonLayer=L.geoJSON(data,{
       style:baseRayonStyle,
       onEachFeature:(feature,layer)=>{
@@ -326,3 +327,4 @@ ws.onmessage = e => {
 </script>
 </body>
 </html>
+
