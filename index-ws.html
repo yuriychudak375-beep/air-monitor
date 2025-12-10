@@ -22,6 +22,31 @@
       height: 100vh;
     }
 
+    #adminBtn {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      padding: 6px 12px;
+      background: #2d6cff;
+      color: #fff;
+      font-size: 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+      transition: 0.15s;
+     }
+#adminBtn:hover {
+  background: #1b4ed6;
+}
+
+body.light #adminBtn {
+  background: #222;
+  color: #fff;
+}
+body.light #adminBtn:hover {
+  background: #000;
+}
     #hud {
       position: fixed;
       top: 10px;
@@ -85,6 +110,8 @@
 </head>
 <body class="dark">
   <div id="map"></div>
+  
+  <div id="adminBtn">Адмін</div>
 
   <div id="hud">
     <div id="clock">--:--:--</div>
@@ -324,3 +351,4 @@
   </script>
 </body>
 </html>
+
