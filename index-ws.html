@@ -201,174 +201,136 @@
       });
     }
 
-    // ===== РАЙОНИ / ОБЛАСТІ (GEOJSON) =====
-    let rayonLayer = null;
-    const rayonByKey = new Map(); // ключ -> layer
-    let activeKeys = new Set();
-    let geojsonReady = false;
-    let lastAlertPacket = null;
+// ====================== РАЙОНИ / ОБЛАСТІ (GEOJSON) ======================
+let geojsonReady = false;
+let rayonLayer = null;
+const rayonByKey = new Map();
+let activeKeys = new Set();
+let lastAlertPacket = null;
 
-    function normName(str) {
-      return String(str || "")
-        .toLowerCase()
-        .replace(/[«»"']/g, "")
-        .replace(/район/g, "")
-        .replace(/область/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
+function normName(str) {
+  return String(str || "")
+    .toLowerCase()
+    .replace(/[«»"']/g, "")
+    .replace(/район/g, "")
+    .replace(/область/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-    function baseStyle() {
-      return {
-        color: isDark ? "#555" : "#777",
-        weight: 1,
-        fillColor: isDark ? "#000" : "#fff",
-        fillOpacity: 0.08
-      };
-    }
+function baseStyle() {
+  return {
+    color: isDark ? "#555" : "#777",
+    weight: 1,
+    fillColor: isDark ? "#000" : "#fff",
+    fillOpacity: 0.08
+  };
+}
 
-    function alertStyle() {
-      return {
-        color: "#ff3333",
-        weight: 2,
-        fillColor: "#ff0000",
-        fillOpacity: 0.4
-      };
-    }
+function alertStyle() {
+  return {
+    color: "#ff3333",
+    weight: 2,
+    fillColor: "#ff0000",
+    fillOpacity: 0.4
+  };
+}
 
-    function refreshRayonStyles() {
-      rayonByKey.forEach((layer, key) => {
-        if (activeKeys.has(key)) {
-          layer.setStyle(alertStyle());
-        } else {
-          layer.setStyle(baseStyle());
-        }
-      });
-    }
+function refreshRayonStyles() {
+  rayonByKey.forEach((layer, key) => {
+    if (activeKeys.has(key)) layer.setStyle(alertStyle());
+    else layer.setStyle(baseStyle());
+  });
+}
 
-    // Підключаємо твій rayony.geojson
-    fetch("rayony.geojson")
-      .then(r => r.json())
-      .then(data => {
-        rayonLayer = L.geoJSON(data, {
-          style: baseStyle,
-          onEachFeature: (feature, layer) => {
-            const p = feature.properties || {};
+// ---------- ПІДКЛЮЧЕННЯ rayony.geojson ----------
+fetch("rayony.geojson")
+  .then(r => r.json())
+  .then(data => {
+    rayonLayer = L.geoJSON(data, {
+      style: baseStyle,
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties || {};
 
-            const title =
-              p.NAME_1 ||
-              p.name ||
-              p.rayon_ua ||
-              p.display_name ||
-              "";
+        const title =
+          p.NAME_1 ||
+          p.name ||
+          p.rayon_ua ||
+          p.display_name ||
+          "";
 
-            if (title) {
-              layer.bindPopup(title);
-            }
+        if (title) layer.bindPopup(title);
 
-            // ID
-            const idCandidates = [
-              p.location_uid,
-              p.location_oblast_uid,
-              p.uid,
-              p.id,
-              p.ID
-            ];
-            idCandidates.forEach(v => {
-              if (v != null) {
-                rayonByKey.set("id:" + String(v), layer);
-              }
-            });
-
-            // Назви
-            const nameCandidates = [
-              p.NAME_1,
-              p.name,
-              p.rayon_ua,
-              p.display_name
-            ];
-            nameCandidates.forEach(n => {
-              if (n) {
-                rayonByKey.set("name:" + normName(n), layer);
-              }
-            });
-          }
-        }).addTo(map);
-
-        geojsonReady = true;
-        console.log("Rayons loaded:", rayonByKey.size);
-
-        if (lastAlertPacket) {
-          applyAlertsToMap(lastAlertPacket);
-        }
-      })
-      .catch(err => console.error("rayony.geojson load error:", err));
-
-    // ===== ПІДСВІЧУВАННЯ ТРИВОГ =====
-    function applyAlertsToMap(alerts) {
-      if (!geojsonReady || !alerts || !Array.isArray(alerts)) return;
-
-      const nextActive = new Set();
-
-      alerts.forEach(a => {
-        // якщо API шле інші типи — ігноруємо не air_raid
-        if (a.alert_type && a.alert_type !== "air_raid") return;
-
-        const keys = [];
-
-        // ID з API
-        if (a.location_uid != null) {
-          keys.push("id:" + String(a.location_uid));
-        }
-        if (a.location_oblast_uid != null) {
-          keys.push("id:" + String(a.location_oblast_uid));
-        }
-
-        // Назви з API
-        if (a.location_title) {
-          keys.push("name:" + normName(a.location_title));
-        }
-        if (a.location_raion) {
-          keys.push("name:" + normName(a.location_raion));
-        }
-        if (a.location_oblast) {
-          keys.push("name:" + normName(a.location_oblast));
-        }
-
-        keys.forEach(k => {
-          if (rayonByKey.has(k)) {
-            nextActive.add(k);
-          }
+        // ID
+        [
+          p.location_uid,
+          p.location_oblast_uid,
+          p.uid,
+          p.id,
+          p.ID
+        ].forEach(v => {
+          if (v != null) rayonByKey.set("id:" + String(v), layer);
         });
-      });
 
-      activeKeys = nextActive;
-      refreshRayonStyles();
-    }
-
-    // debugApplyAlerts([{location_title:"Сумський район", alert_type:"air_raid"}])
-    window.debugApplyAlerts = function(list) {
-      lastAlertPacket = list;
-      if (geojsonReady) applyAlertsToMap(list);
-    };
-
-    // ===== WS =====
-    const ws = new WebSocket(
-      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
-    );
-
-    ws.onopen = () => console.log("WS viewer connected");
-
-    ws.onmessage = e => {
-      const d = JSON.parse(e.data);
-
-      if (d.type === "state" && Array.isArray(d.targets)) {
-        applyState(d.targets);
+        // НАЗВИ
+        [
+          p.NAME_1,
+          p.name,
+          p.rayon_ua,
+          p.display_name
+        ].forEach(n => {
+          if (n) rayonByKey.set("name:" + normName(n), layer);
+        });
       }
+    }).addTo(map);
 
-      if (d.type === "alerts") {
-        // Підтримуємо і alerts, і regions на всякий випадок
-        const arr = Array.isArray(d.alerts)
+    geojsonReady = true;
+    console.log("Rayons loaded:", rayonByKey.size);
+
+    if (lastAlertPacket) applyAlertsToMap(lastAlertPacket);
+  })
+  .catch(err => console.error("rayony.geojson load error:", err));
+
+// ---------- ЛОГІКА ПІДСВІЧУВАННЯ ----------
+function applyAlertsToMap(alerts) {
+  if (!geojsonReady || !alerts || !Array.isArray(alerts)) return;
+
+  const next = new Set();
+
+  alerts.forEach(a => {
+    if (a.alert_type && a.alert_type !== "air_raid") return;
+
+    const keys = [];
+
+    if (a.location_uid != null)
+      keys.push("id:" + String(a.location_uid));
+
+    if (a.location_oblast_uid != null)
+      keys.push("id:" + String(a.location_oblast_uid));
+
+    if (a.location_title)
+      keys.push("name:" + normName(a.location_title));
+
+    if (a.location_raion)
+      keys.push("name:" + normName(a.location_raion));
+
+    if (a.location_oblast)
+      keys.push("name:" + normName(a.location_oblast));
+
+    keys.forEach(k => {
+      if (rayonByKey.has(k)) next.add(k);
+    });
+  });
+
+  activeKeys = next;
+  refreshRayonStyles();
+}
+
+// debug
+window.debugApplyAlerts = list => {
+  lastAlertPacket = list;
+  if (geojsonReady) applyAlertsToMap(list);
+};arr = Array.isArray(d.alerts)
           ? d.alerts
           : Array.isArray(d.regions)
           ? d.regions
@@ -385,4 +347,5 @@
   </script>
 </body>
 </html>
+
 
