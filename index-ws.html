@@ -122,10 +122,13 @@ body.light #adminBtn:hover {
     <span id="legend-box"></span>
     Активна повітряна тривога (район)
   </div>
-
+  
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     
+    document.getElementById("adminBtn").onclick = () => {
+    location.href = "/admin-ws.html";
+   };
     const map = L.map("map").setView([49, 31], 6);
 
     const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -351,4 +354,5 @@ body.light #adminBtn:hover {
   </script>
 </body>
 </html>
+
 
