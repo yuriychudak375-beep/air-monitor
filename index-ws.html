@@ -18,42 +18,31 @@
     body.dark { background: #050608; color: #eee; }
     body.light { background: #f2f2f2; color: #111; }
 
-    #map {
-      width: 100vw;
-      height: 100vh;
-    }
+    #map { width: 100vw; height: 100vh; }
 
-    /* =========================
-       ВИПРАВЛЕНИЙ HUD (ГОДИННИК)
-       ========================= */
+    /* HUD */
     #hud {
       position: fixed;
       top: 10px;
       left: 10px;
       z-index: 2000;
-      background: rgba(0,0,0,0.65);   /* стабільний фон */
+      background: rgba(0,0,0,0.65);
       color: #fff;
       padding: 8px 12px;
       border-radius: 8px;
       font-size: 14px;
-      line-height: 1.25;
       min-width: 120px;
       min-height: 40px;
       display: flex;
       flex-direction: column;
       justify-content: center;
     }
-
     body.light #hud {
       background: rgba(255,255,255,0.85);
       color: #111;
     }
 
-    #clock {
-      font-weight: 700;
-      margin-bottom: 6px;
-      font-size: 14px;
-    }
+    #clock { font-weight: 700; margin-bottom: 6px; font-size: 14px; }
 
     #themeToggle {
       border: none;
@@ -64,12 +53,12 @@
       background: #2d6cff;
       color: #fff;
     }
-
     body.light #themeToggle {
       background: #222;
       color: #fff;
     }
 
+    /* Legend */
     #legend {
       position: fixed;
       bottom: 10px;
@@ -81,12 +70,10 @@
       border-radius: 8px;
       font-size: 12px;
     }
-
     body.light #legend {
       background: rgba(255,255,255,0.85);
       color: #111;
     }
-
     #legend-box {
       display: inline-block;
       width: 14px;
@@ -113,172 +100,98 @@
     Активна повітряна тривога (район/область)
   </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
 
-  <script>
-    /* ====== КАРТА ====== */
-    const map = L.map("map").setView([49, 31], 6);
+const map = L.map("map").setView([49,31],6);
+const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:10,minZoom:4});
+const tilesDark  = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{maxZoom:10,minZoom:4,subdomains:"abcd"});
+let isDark = true;
+tilesDark.addTo(map);
 
-    const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 10,
-      minZoom: 4
-    });
+/* Clock */
+const clockEl=document.getElementById("clock");
+function updateClock(){
+  clockEl.textContent=new Date().toLocaleString("uk-UA",{timeZone:"Europe/Kyiv",
+    day:"2-digit",month:"2-digit",year:"numeric",
+    hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+setInterval(updateClock,1000); updateClock();
 
-    const tilesDark = L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      { maxZoom: 10, minZoom: 4, subdomains: "abcd" }
-    );
+/* Theme switch */
+document.getElementById("themeToggle").onclick=()=>{
+  if(isDark){
+    map.removeLayer(tilesDark); tilesLight.addTo(map);
+    isDark=false; document.body.classList.replace("dark","light");
+    themeToggle.textContent="Темна тема";
+  } else {
+    map.removeLayer(tilesLight); tilesDark.addTo(map);
+    isDark=true; document.body.classList.replace("light","dark");
+    themeToggle.textContent="Світла тема";
+  }
+};
 
-    let isDark = true;
-    tilesDark.addTo(map);
+/* MODELS */
+const MODEL_PNG={x101:"models/x101.png",shahed:"models/shahed.png",
+                 iskander:"models/iskander.png",kalibr:"models/kalibr.png"};
+const ROT_OFFSET={x101:-45,shahed:0,iskander:0,kalibr:0};
 
-    /* ====== ГОДИННИК ====== */
-    const clockEl = document.getElementById("clock");
-    function updateClock() {
-      const now = new Date();
-      clockEl.textContent = now.toLocaleString("uk-UA", {
-        timeZone: "Europe/Kyiv",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      });
-    }
-    updateClock();
-    setInterval(updateClock, 1000);
+function createMarker(t){
+  const div=document.createElement("div");
+  div.style.width="60px"; div.style.height="60px";
+  div.style.display="flex"; div.style.alignItems="center"; div.style.justifyContent="center";
+  const img=document.createElement("img");
+  img.src=MODEL_PNG[t.type]||MODEL_PNG["x101"];
+  img.style.width="100%"; img.style.height="100%"; img.style.objectFit="contain"; img.style.transformOrigin="center";
+  div.appendChild(img);
+  const icon=L.divIcon({className:"",html:div,iconSize:[60,60],iconAnchor:[30,30]});
+  const m=L.marker([t.lat,t.lon],{icon}); m._imgRef=img; return m;
+}
+const markers=new Map();
+function update(list){
+  const alive=new Set();
+  list.forEach(t=>{
+    alive.add(t.id);
+    let m=markers.get(t.id);
+    if(!m){ m=createMarker(t); m.addTo(map); markers.set(t.id,m); }
+    else m.setLatLng([t.lat,t.lon]);
+    let ang=Math.atan2(t.dy,t.dx)*180/Math.PI;
+    ang=90-ang+(ROT_OFFSET[t.type]||0);
+    m._imgRef.style.transform=`rotate(${ang}deg)`;
+  });
+  markers.forEach((m,id)=>{if(!alive.has(id)){map.removeLayer(m);markers.delete(id);}});
+}
 
-    /* ====== ТЕМИ ====== */
-    const themeBtn = document.getElementById("themeToggle");
-    themeBtn.onclick = () => {
-      if (isDark) {
-        map.removeLayer(tilesDark);
-        tilesLight.addTo(map);
-        isDark = false;
-        document.body.classList.replace("dark", "light");
-        themeBtn.textContent = "Темна тема";
-      } else {
-        map.removeLayer(tilesLight);
-        tilesDark.addTo(map);
-        isDark = true;
-        document.body.classList.replace("light", "dark");
-        themeBtn.textContent = "Світла тема";
-      }
-    };
-
-    /* ====== МОДЕЛЬКИ ====== */
-    const MODEL_PNG = {
-      x101: "models/x101.png",
-      shahed: "models/shahed.png",
-      iskander: "models/iskander.png",
-      kalibr: "models/kalibr.png"
-    };
-
-    const ROT_OFFSET = { x101: -45, shahed: 0, iskander: 0, kalibr: 0 };
-
-    function createMarker(t) {
-      const div = document.createElement("div");
-      div.style.width = "60px";
-      div.style.height = "60px";
-      div.style.display = "flex";
-      div.style.alignItems = "center";
-      div.style.justifyContent = "center";
-
-      const img = document.createElement("img");
-      img.src = MODEL_PNG[t.type] || MODEL_PNG["x101"];
-      img.style.width = "100%";
-      img.style.height = "100%";
-      img.style.objectFit = "contain";
-      img.style.transformOrigin = "center";
-
-      div.appendChild(img);
-
-      const icon = L.divIcon({
-        className: "",
-        html: div,
-        iconSize: [60, 60],
-        iconAnchor: [30, 30]
-      });
-
-      const marker = L.marker([t.lat, t.lon], { icon });
-      marker._imgRef = img;
-      return marker;
-    }
-
-    const markers = new Map();
-    
-// ======== LOAD GEOJSON RAYONS =========
-let rayonLayer = null;
-let rayonByName = new Map();
-let activeRayons = new Set();
+/* ===== GEOJSON FIXED ===== */
+let rayonLayer=null;
+let rayonByName=new Map();
 
 fetch(window.location.origin + "/rayony.geojson")
-  .then(r => r.json())
-  .then(data => {
-    rayonLayer = L.geoJSON(data, {
-      style: {
-        color: "#666",
-        weight: 1,
-        fillColor: "#000",
-        fillOpacity: 0.05
-      },
-      onEachFeature: (feature, layer) => {
-        const props = feature.properties || {};
-        const name = (props.NAME_1  props.name  "").toLowerCase().trim();
-
-        if (name) {
-          rayonByName.set(name, layer);
+  .then(r=>r.json())
+  .then(data=>{
+    rayonLayer=L.geoJSON(data,{
+      style:{color:"#666",weight:1,fillColor:"#000",fillOpacity:0.05},
+      onEachFeature:(feature,layer)=>{
+        const props=feature.properties||{};
+        const name=(props.NAME_1 || props.name || "").toLowerCase().trim();  // FIXED LINE
+        if(name){
+          rayonByName.set(name,layer);
           layer.bindPopup(props.NAME_1 || props.name);
         }
       }
     }).addTo(map);
-
-    console.log("Rayons loaded:", rayonByName.size);
+    console.log("Rayons loaded:",rayonByName.size);
   })
-  .catch(err => console.error("GeoJSON ERROR:", err));
-    function update(list) {
-      const alive = new Set();
-      list.forEach(t => {
-        alive.add(t.id);
-        let m = markers.get(t.id);
-        if (!m) {
-          m = createMarker(t);
-          m.addTo(map);
-          markers.set(t.id, m);
-        } else {
-          m.setLatLng([t.lat, t.lon]);
-        }
-        let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
-        angle = 90 - angle + (ROT_OFFSET[t.type] || 0);
-        m._imgRef.style.transform = `rotate(${angle}deg)`;
-      });
-      markers.forEach((m, id) => {
-        if (!alive.has(id)) {
-          map.removeLayer(m);
-          markers.delete(id);
-        }
-      });
-    }
+  .catch(err=>console.error("GeoJSON ERROR:",err));
 
-    /* ====== ТРИВОГИ (ти поки не включав) ====== */
-    function applyAlerts() {}
-    function applyAlertsToMap() {}
-    window.debugApplyAlerts = function(){};
+/* WebSocket */
+const ws=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host);
+ws.onmessage=e=>{
+  const d=JSON.parse(e.data);
+  if(d.type==="state") update(d.targets);
+};
 
-    /* ====== WEBSOCKET ====== */
-    const ws = new WebSocket(
-      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
-    );
-
-    ws.onopen = () => console.log("WS viewer connected");
-
-    ws.onmessage = e => {
-      const d = JSON.parse(e.data);
-      if (d.type === "state") update(d.targets);
-      if (d.type === "alerts") applyAlerts(d.regions);
-    };
-  </script>
+</script>
 </body>
 </html>
-
+    
