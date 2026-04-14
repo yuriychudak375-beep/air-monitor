@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <title>Air Monitor — Viewer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body.dark { background: #050608; color: #eee; }
+    body.light { background: #f2f2f2; color: #111; }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #adminBtn {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      padding: 6px 12px;
+      background: #2d6cff;
+      color: #fff;
+      font-size: 13px;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+      transition: 0.15s;
+     }
+#adminBtn:hover {
+  background: #1b4ed6;
+}
+
+body.light #adminBtn {
+  background: #222;
+  color: #fff;
+}
+body.light #adminBtn:hover {
+  background: #000;
+}
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      backdrop-filter: blur(6px);
+    }
+    body.light #hud {
+      background: rgba(255,255,255,0.8);
+      color: #111;
+    }
+    #clock {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    #themeToggle {
+      border: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      background: #2d6cff;
+      color: #fff;
+    }
+    body.light #themeToggle {
+      background: #222;
+      color: #fff;
+    }
+
+    #legend {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      backdrop-filter: blur(6px);
+    }
+    body.light #legend {
+      background: rgba(255,255,255,0.8);
+      color: #111;
+    }
+    #legend-box {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      margin-right: 6px;
+      border-radius: 3px;
+      background: #ff3333;
+      box-shadow: 0 0 8px rgba(255,0,0,0.9);
+    }
+  </style>
+</head>
+<body class="dark">
+  <div id="map"></div>
+  
+  <div id="adminBtn">Адмін</div>
+
+  <div id="hud">
+    <div id="clock">--:--:--</div>
+    <button id="themeToggle">Світла тема</button>
+  </div>
+
+  <div id="legend">
+    <span id="legend-box"></span>
+    Активна повітряна тривога (район)
+  </div>
+  
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    
+    document.getElementById("adminBtn").onclick = () => {
+    location.href = "/admin-login.html";
+   };
+    const map = L.map("map").setView([49, 31], 6);
+
+    const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 10,
+      minZoom: 4,
+      attribution: "&copy; OpenStreetMap"
+    });
+
+    const tilesDark = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 10,
+        minZoom: 4,
+        subdomains: "abcd",
+        attribution: "&copy; OpenStreetMap, &copy; CartoDB"
+      }
+    );
+
+    let isDark = true;
+    tilesDark.addTo(map);
+
+    const clockEl = document.getElementById("clock");
+    function updateClock() {
+      const now = new Date();
+      clockEl.textContent = now.toLocaleString("uk-UA", {
+        timeZone: "Europe/Kyiv",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    const themeBtn = document.getElementById("themeToggle");
+    themeBtn.onclick = () => {
+      if (isDark) {
+        map.removeLayer(tilesDark);
+        tilesLight.addTo(map);
+        isDark = false;
+        document.body.classList.remove("dark");
+        document.body.classList.add("light");
+        themeBtn.textContent = "Темна тема";
+      } else {
+        map.removeLayer(tilesLight);
+        tilesDark.addTo(map);
+        isDark = true;
+        document.body.classList.remove("light");
+        document.body.classList.add("dark");
+        themeBtn.textContent = "Світла тема";
+      }
+      updateRayonStyles();
+    };
+
+    // =====================================================
+    //  МОДЕЛІ ЛІТАКІВ — залишаю як було, нічого не чіпаю
+    // =====================================================
+
+    const MODEL_PNG = {
+      x101: "models/x101.png",
+      shahed: "models/shahed.png",
+      iskander: "models/iskander.png",
+      kalibr: "models/kalibr.png"
+    };
+
+    const ROT_OFFSET = { x101: -45, shahed: 0, iskander: 0, kalibr: 0 };
+
+    function createMarker(t) {
+      const div = document.createElement("div");
+      div.style.width = "60px";
+      div.style.height = "60px";
+      div.style.display = "flex";
+      div.style.alignItems = "center";
+      div.style.justifyContent = "center";
+
+      const img = document.createElement("img");
+      img.src = MODEL_PNG[t.type] || MODEL_PNG["x101"];
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      img.style.transformOrigin = "center";
+      img.style.transition = "transform 0.15s linear";
+
+      div.appendChild(img);
+
+      const icon = L.divIcon({
+        className: "",
+        html: div,
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
+      });
+
+      const marker = L.marker([t.lat, t.lon], { icon });
+      marker._imgRef = img;
+      return marker;
+    }
+
+    const markers = new Map();
+
+    function update(list) {
+      const alive = new Set();
+
+      list.forEach(t => {
+        alive.add(t.id);
+
+        let marker = markers.get(t.id);
+        if (!marker) {
+          marker = createMarker(t);
+          marker.addTo(map);
+          markers.set(t.id, marker);
+        } else {
+          marker.setLatLng([t.lat, t.lon]);
+        }
+
+        let angle = Math.atan2(t.dy, t.dx) * 180 / Math.PI;
+        angle = 90 - angle + (ROT_OFFSET[t.type] || 0);
+        marker._imgRef.style.transform = `rotate(${angle}deg)`;
+      });
+
+      markers.forEach((m, id) => {
+        if (!alive.has(id)) {
+          map.removeLayer(m);
+          markers.delete(id);
+        }
+      });
+    }
+
+    // =====================================================
+    //               Р А Й О Н И   Т А   Т Р И В О Г И
+    // =====================================================
+
+    function norm(s) {
+      return String(s || "")
+        .toLowerCase()
+        .replace(/[«»"']/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    let rayonByKey = new Map();
+    let activeRayons = new Set();
+
+    fetch("rayony.geojson")
+      .then(r => r.json())
+      .then(data => {
+        L.geoJSON(data, {
+          style: () => ({
+            color: "#666",
+            weight: 1,
+            fillColor: "#000",
+            fillOpacity: 0.05
+          }),
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+            if (!p.rayon) return;
+
+            const key = norm(p.rayon);
+            rayonByKey.set(key, layer);
+
+            layer.bindPopup(p.rayon);
+          }
+        }).addTo(map);
+
+        console.log("Rayons loaded:", rayonByKey.size);
+      })
+      .catch(err => console.error("GeoJSON load error:", err));
+
+    function updateRayonStyles() {
+      rayonByKey.forEach((layer, key) => {
+        if (activeRayons.has(key)) {
+          layer.setStyle({
+            color: "#ff0000",
+            weight: 2,
+            fillColor: "#ff0000",
+            fillOpacity: 0.45
+          });
+        } else {
+          layer.setStyle({
+            color: isDark ? "#555" : "#777",
+            weight: 1,
+            fillColor: isDark ? "#000" : "#fff",
+            fillOpacity: 0.05
+          });
+        }
+      });
+    }
+
+    function applyAlerts(alertList) {
+      activeRayons.clear();
+
+      alertList.forEach(a => {
+        if (a.alert_type !== "air_raid") return;
+        if (a.location_type !== "raion") return;
+
+        const key = norm(a.location_title);
+        if (rayonByKey.has(key)) {
+          activeRayons.add(key);
+        }
+      });
+
+      updateRayonStyles();
+    }
+
+    // =====================================================
+    //                 WebSocket
+    // =====================================================
+
+    const ws = new WebSocket(
+      (location.protocol === "https:" ? "wss://" : "ws://") + location.host
+    );
+
+    ws.onopen = () => console.log("WS viewer connected");
+
+    ws.onmessage = e => {
+      const d = JSON.parse(e.data);
+
+      if (d.type === "state") update(d.targets);
+      if (d.type === "alerts") applyAlerts(d.regions || d.alerts || []);
+    };
+  </script>
+</body>
+</html>
+
+
+
