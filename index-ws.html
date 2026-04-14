@@ -171,7 +171,7 @@
       return s.toLowerCase().replace(/ район/g, "").trim();
     }
 
-    fetch("/raions.geojson")
+    fetch("/rayony.geojson")
       .then(r => r.json())
       .then(data => {
         L.geoJSON(data, {
