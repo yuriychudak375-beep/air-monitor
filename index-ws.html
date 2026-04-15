@@ -154,6 +154,26 @@ body.light #adminBtn:hover {
     body.light .msg-item { border-bottom: 1px solid #ddd; }
     .msg-date { color: #888; font-size: 11px; margin-bottom: 4px; }
     .channel-link { color: #0088cc; text-decoration: none; font-weight: bold; }
+    /* Стиль для відображення часу початку тривоги */
+    .alarm-time-label {
+      background: rgba(0, 0, 0, 0.7) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      color: #fff !important;
+      font-size: 10px !important;
+      font-weight: bold !important;
+      padding: 2px 4px !important;
+      border-radius: 4px !important;
+      box-shadow: none !important;
+    }
+    /* Стиль для підписів аеродромів */
+    .base-label {
+      background: none !important;
+      border: none !important;
+      color: #ffea00 !important;
+      font-weight: bold !important;
+      text-shadow: 1px 1px 2px #000;
+      box-shadow: none !important;
+    }
   </style>
 </head>
 <body class="dark">
@@ -194,6 +214,28 @@ body.light #adminBtn:hover {
    };
     const map = L.map("map").setView([49, 31], 6);
 
+    // Список авіабаз та пускових районів
+    const militaryBases = [
+      { name: "Оленья (Ту-95МС)", lat: 68.15, lon: 33.30, icon: "🛫" },
+      { name: "Енгельс (Ту-160/95)", lat: 51.48, lon: 46.21, icon: "🛫" },
+      { name: "Шайковка (Ту-22М3)", lat: 54.22, lon: 34.36, icon: "🛫" },
+      { name: "Приморсько-Ахтарськ (🚀)", lat: 46.03, lon: 38.24, icon: "🎯" },
+      { name: "Курськ (СУ/МіГ)", lat: 51.75, lon: 36.14, icon: "🛫" }
+    ];
+
+    militaryBases.forEach(base => {
+      L.marker([base.lat, base.lon], {
+        icon: L.divIcon({
+          html: `<div style="font-size: 20px;">${base.icon}</div>`,
+          className: 'custom-div-icon',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        })
+      })
+      .addTo(map)
+      .bindTooltip(base.name, { permanent: true, direction: 'top', className: 'base-label' });
+    });
+    
     const tilesLight = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 10,
       minZoom: 4,
@@ -392,6 +434,28 @@ body.light #adminBtn:hover {
         const key = norm(a.location_title);
         if (rayonByKey.has(key)) {
           activeRayons.add(key);
+          
+          const layer = rayonByKey.get(key);
+          // Форматуємо час з поля started_at
+          const startTime = a.started_at ? new Date(a.started_at).toLocaleTimeString('uk-UA', {
+            hour: '2-digit', 
+            minute: '2-digit'
+          }) : "--:--";
+          
+          // Відображаємо час на районі
+          layer.unbindTooltip();
+          layer.bindTooltip(`Початок: ${startTime}`, {
+            permanent: true,
+            direction: "center",
+            className: "alarm-time-label"
+          });
+        }
+      });
+
+      // Прибираємо написи з районів, де тривога закінчилась
+      rayonByKey.forEach((layer, key) => {
+        if (!activeRayons.has(key)) {
+          layer.unbindTooltip();
         }
       });
 
